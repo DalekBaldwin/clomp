@@ -30,8 +30,6 @@
              (unless (eql symbol cl-symbol)
                `(progn
                   (defclass ,symbol (clomp::form) ())
-                  (defmethod clomp:evaluate ((form ,symbol))
-                    (call-next-method))
                   (defmacro ,symbol (&whole whole-sexp &rest args)
                     (declare (ignorable args))
                     `(clomp:evaluate

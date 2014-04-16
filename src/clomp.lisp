@@ -40,12 +40,12 @@
                        :sexp ',whole-sexp
                        :closure (cl:lambda ()
                                   (,',cl-symbol
-                                   ,@(cl:if
-                                      (cl:or (cl:special-operator-p ',cl-symbol)
-                                             (cl:macro-function ',cl-symbol))
-                                      (cl:rest whole-sexp)
-                                      (cl:loop :for arg :in args
-                                               :collect `(funarg ,arg))))))))))))))
+                                   ',@',(cl:if
+                                         (cl:or (cl:special-operator-p cl-symbol)
+                                                (cl:macro-function cl-symbol))
+                                         `(cl:rest whole-sexp)
+                                         `(cl:loop :for arg :in args
+                                                   :collect `(funarg ,arg))))))))))))))
 
 (cl:defmacro define-closure-wrappers ()
   `(cl:progn

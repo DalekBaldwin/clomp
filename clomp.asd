@@ -4,11 +4,10 @@
   (:use :cl :asdf))
 (in-package :clomp-system)
 
-
-
 (defsystem :clomp
   :name "clomp"
   :serial t
+  :licence "LLGPL"
   :components
   ((:static-file "clomp.asd")
    (:module :src

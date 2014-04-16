@@ -47,15 +47,6 @@
                                       (cl:loop :for arg :in args
                                                :collect `(funarg ,arg))))))))))))))
 
-(cl:defmacro define-closure-wrappers (&rest symbols)
-  (cl:if (cl:null symbols)
-         `(cl:progn
-            ,@(cl:loop :for symbol :in (cl:package-shadowing-symbols cl:*package*)
-                       :collect `(define-closure-wrapper ,symbol)))
-         `(cl:progn
-            ,@(cl:loop :for symbol :in symbols
-                       :collect `(define-closure-wrapper ,symbol)))))
-
 (cl:defmacro define-closure-wrappers ()
   `(cl:progn
      ,@(cl:loop :for symbol :in (cl:package-shadowing-symbols cl:*package*)

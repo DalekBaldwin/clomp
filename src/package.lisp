@@ -3,7 +3,7 @@
 (in-package :clomp-system)
 
 (cl:eval-when (:compile-toplevel :load-toplevel :execute)
-  (defparameter *shadowed-functions*
+  (defparameter *shadowed-functions-and-macros*
     (loop for symbol being the symbols of :common-lisp
        when (fboundp symbol)
        collect symbol))
@@ -41,7 +41,7 @@
      (:use :cl)
      (:shadow
       ,@*special-operators*
-      ,@(loop for symbol in *shadowed-functions*
+      ,@(loop for symbol in *shadowed-functions-and-macros*
            collect (intern (symbol-name symbol) :keyword)))
      (:export
       :evaluate
@@ -49,7 +49,7 @@
       :closure
       :funarg
       ,@*special-operators*
-      ,@(loop for symbol in *shadowed-functions*
+      ,@(loop for symbol in *shadowed-functions-and-macros*
            collect (intern (symbol-name symbol) :keyword)))))
 
 (in-package :cl)

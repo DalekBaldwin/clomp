@@ -60,7 +60,7 @@ This project is intended to be a jumping-off point for exploring a number of dif
         (IF (> X Y) (+ X Y) (* X Y))): 6
 ```
 
-I took the phrase "closure-oriented metaprogramming" from Vladimir Sedach's [awesome example] [1] which demonstrates how this approach can be used to infer static code structure from dynamic behavior. He notes a few caveats:
+I took the phrase "closure-oriented metaprogramming" from [Vladimir Sedach] [1]'s [awesome example] [2] which demonstrates how this approach can be used to infer static code structure from dynamic behavior. He notes a few caveats:
 
 > This code also provides examples of the two problems that the closure-oriented metaprogramming approach encounters in Common Lisp:
 
@@ -74,4 +74,5 @@ As Clomp demonstrates, this is not too difficult.
 
 One last note: There may be issues involving certain special forms no longer receiving special treatment as top-level forms by the underlying implementation.
 
-[1]:http://carcaddar.blogspot.com/2009/04/closure-oriented-metaprogramming-via.html
+[1]:https://github.com/vsedach
+[2]:http://carcaddar.blogspot.com/2009/04/closure-oriented-metaprogramming-via.html

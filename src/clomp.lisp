@@ -87,5 +87,5 @@
     (t
      `(evaluate
        (cl:make-instance 'function
-        :sex ',whole-sexp
+        :sexp ',whole-sexp
         :closure (cl:lambda () (cl:function ,@(cl:rest whole-sexp))))))))

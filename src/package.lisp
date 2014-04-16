@@ -47,6 +47,7 @@
       :evaluate
       :sexp
       :closure
+      :funarg
       ,@*special-operators*
       ,@(loop for symbol in *shadowed-functions*
            collect (intern (symbol-name symbol) :keyword)))))

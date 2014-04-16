@@ -9,9 +9,18 @@
     :accessor closure
     :initarg :closure)))
 
+(cl:defclass funarg (form) ())
+
 (cl:defgeneric evaluate (form)
   (:method (form)
     (cl:funcall (closure form))))
+
+(cl:defmacro funarg (&whole whole-sexp arg)
+  (cl:declare (cl:ignorable whole-sexp))
+  `(evaluate
+    (cl:make-instance 'funarg
+     :sexp ',arg
+     :closure (cl:lambda () ,arg))))
 
 (cl:defmacro define-closure-wrapper (symbol)
   (cl:let ((symbol-name (cl:symbol-name symbol)))
@@ -30,7 +39,13 @@
                       (cl:make-instance ',',symbol
                        :sexp ',whole-sexp
                        :closure (cl:lambda ()
-                                  (,',cl-symbol ,@(cl:rest whole-sexp))))))))))))
+                                  (,',cl-symbol
+                                   ,@(cl:if
+                                      (cl:or (cl:special-operator-p ',cl-symbol)
+                                             (cl:macro-function ',cl-symbol))
+                                      (cl:rest whole-sexp)
+                                      (cl:loop :for arg :in args
+                                               :collect `(funarg ,arg))))))))))))))
 
 (cl:defmacro define-closure-wrappers (&rest symbols)
   (cl:if (cl:null symbols)

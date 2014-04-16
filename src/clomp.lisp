@@ -1,73 +1,72 @@
-(cl:in-package :clomp)
-(named-readtables:in-readtable :clomp)
+(in-package :clomp-implementation)
 
-(cl:defclass form ()
-  ((sexp
-    :accessor sexp
+(defclass clomp::form ()
+  ((clomp:sexp
+    :accessor clomp:sexp
     :initarg :sexp)
-   (closure
-    :accessor closure
+   (clomp:closure
+    :accessor clomp:closure
     :initarg :closure)))
 
-(cl:defclass funarg (form) ())
+(defclass clomp:funarg (clomp::form) ())
 
-(cl:defgeneric evaluate (form)
+(defgeneric clomp:evaluate (form)
   (:method (form)
-    (cl:funcall (closure form))))
+    (funcall (clomp:closure form))))
 
-(cl:defmacro funarg (&whole whole-sexp arg)
-  (cl:declare (cl:ignorable whole-sexp))
-  `(evaluate
-    (cl:make-instance 'funarg
+(defmacro clomp:funarg (&whole whole-sexp arg)
+  (declare (ignorable whole-sexp))
+  `(clomp:evaluate
+    (make-instance 'clomp:funarg
      :sexp ',arg
-     :closure (cl:lambda () ,arg))))
+     :closure (lambda () ,arg))))
 
-(cl:defmacro define-closure-wrapper (symbol)
-  (cl:let ((symbol-name (cl:symbol-name symbol)))
-    (cl:multiple-value-bind (cl-symbol foundp)
-        (cl:find-symbol symbol-name :common-lisp)
-      (cl:if (cl:not foundp)
-             (cl:error "Symbol ~A not in package COMMON-LISP" symbol-name)
-             (cl:unless (cl:eql symbol cl-symbol)
-               `(cl:progn
-                  (cl:defclass ,symbol (form) ())
-                  (cl:defmethod evaluate ((form ,symbol))
-                    (cl:call-next-method))
-                  (cl:defmacro ,symbol (&whole whole-sexp &rest args)
-                    (cl:declare (cl:ignorable args))
-                    `(evaluate
-                      (cl:make-instance ',',symbol
+(defmacro define-closure-wrapper (symbol)
+  (let ((symbol-name (symbol-name symbol)))
+    (multiple-value-bind (cl-symbol foundp)
+        (find-symbol symbol-name :common-lisp)
+      (if (not foundp)
+             (error "Symbol ~A not in package COMMON-LISP" symbol-name)
+             (unless (eql symbol cl-symbol)
+               `(progn
+                  (defclass ,symbol (clomp::form) ())
+                  (defmethod clomp:evaluate ((form ,symbol))
+                    (call-next-method))
+                  (defmacro ,symbol (&whole whole-sexp &rest args)
+                    (declare (ignorable args))
+                    `(clomp:evaluate
+                      (make-instance ',',symbol
                        :sexp ',whole-sexp
-                       :closure (cl:lambda ()
+                       :closure (lambda ()
                                   (,',cl-symbol
-                                   ,@,(cl:if
-                                       (cl:or (cl:special-operator-p cl-symbol)
-                                              (cl:macro-function cl-symbol))
-                                       `(cl:rest whole-sexp)
-                                       `(cl:loop :for arg :in args
-                                                 :collect `(funarg ,arg))))))))))))))
+                                   ,@,(if
+                                       (or (special-operator-p cl-symbol)
+                                           (macro-function cl-symbol))
+                                       `(rest whole-sexp)
+                                       `(loop :for arg :in args
+                                           :collect `(clomp:funarg ,arg))))))))))))))
 
-(cl:defmacro define-closure-wrappers ()
-  `(cl:progn
-     ,@(cl:loop :for symbol :in (cl:package-shadowing-symbols cl:*package*)
+(defmacro define-closure-wrappers ()
+  `(progn
+     ,@(loop :for symbol :in (package-shadowing-symbols (find-package :clomp))
                 :collect `(define-closure-wrapper ,symbol))))
 
 (define-closure-wrappers)
 
-(cl:defmacro function (&whole whole-sexp thing)
-  (cl:let ((wrapped-function-form
-            (cl:cond
-              ((cl:and (cl:listp thing)
-                       (cl:eql (cl:first thing) 'lambda))
-               `(cl:function (cl:lambda ,@(cl:rest thing))))
-              ((cl:and (cl:symbolp thing)
-                       (cl:multiple-value-bind (cl-symbol foundp)
-                           (cl:find-symbol (cl:symbol-name thing) :common-lisp)
-                         (cl:and foundp (cl:fboundp cl-symbol))))
-               `(cl:function ,(cl:find-symbol (cl:symbol-name thing) :common-lisp)))
+(defmacro clomp:function (&whole whole-sexp thing)
+  (let ((wrapped-function-form
+            (cond
+              ((and (listp thing)
+                       (eql (first thing) 'lambda))
+               `(function (lambda ,@(rest thing))))
+              ((and (symbolp thing)
+                       (multiple-value-bind (cl-symbol foundp)
+                           (find-symbol (symbol-name thing) :common-lisp)
+                         (and foundp (fboundp cl-symbol))))
+               `(function ,(find-symbol (symbol-name thing) :common-lisp)))
               (t
-               `(cl:function ,@(cl:rest whole-sexp))))))
-    `(evaluate
-      (cl:make-instance 'function
+               `(function ,@(rest whole-sexp))))))
+    `(clomp:evaluate
+      (make-instance 'clomp:function
        :sexp ',whole-sexp
-       :closure (cl:lambda () ,wrapped-function-form)))))
+       :closure (lambda () ,wrapped-function-form)))))

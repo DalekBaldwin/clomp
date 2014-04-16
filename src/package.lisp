@@ -52,17 +52,18 @@
       ,@(loop for symbol in *shadowed-functions-and-macros*
            collect (intern (symbol-name symbol) :keyword)))))
 
+(defpackage :clomp-implementation
+  (:use :cl))
+
 (in-package :cl)
 
 (clomp-system::define-clomp-package)
 
-(in-package :clomp)
-
-(cl:eval-when (:compile-toplevel :load-toplevel :execute)
-  (cl:unless (named-readtables:find-readtable :clomp)
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (unless (named-readtables:find-readtable :clomp)
     (named-readtables:defreadtable :clomp
       (:merge :standard)
       (:dispatch-macro-char #\# #\'
-                            (cl:lambda (stream subchar arg)
+                            (lambda (stream subchar arg)
                               (declare (ignore subchar arg))
-                              `(function ,(cl:read stream t nil t)))))))
+                              `(clomp:function ,(read stream t nil t)))))))

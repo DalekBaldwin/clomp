@@ -40,12 +40,12 @@
                        :sexp ',whole-sexp
                        :closure (cl:lambda ()
                                   (,',cl-symbol
-                                   ',@',(cl:if
-                                         (cl:or (cl:special-operator-p cl-symbol)
-                                                (cl:macro-function cl-symbol))
-                                         `(cl:rest whole-sexp)
-                                         `(cl:loop :for arg :in args
-                                                   :collect `(funarg ,arg))))))))))))))
+                                   ,@(cl:if
+                                      (cl:or (cl:special-operator-p ',cl-symbol)
+                                             (cl:macro-function ',cl-symbol))
+                                      (cl:rest whole-sexp)
+                                      (cl:loop :for arg :in args
+                                               :collect `(funarg ,arg))))))))))))))
 
 (cl:defmacro define-closure-wrappers ()
   `(cl:progn
@@ -55,28 +55,19 @@
 (define-closure-wrappers)
 
 (cl:defmacro function (&whole whole-sexp thing)
-  (cl:cond
-    ((cl:and (cl:listp thing)
-             (cl:eql (cl:first thing) 'lambda))
-     `(evaluate
-       (cl:make-instance 'function
-        :sexp ',whole-sexp
-        :closure (cl:lambda ()
-                   (cl:function (cl:lambda ,@(cl:rest thing)))))))
-    ((cl:and (cl:symbolp thing)
-             (cl:multiple-value-bind (cl-symbol foundp)
-                 (cl:find-symbol (cl:symbol-name thing) :common-lisp)
-               (cl:and foundp (cl:fboundp cl-symbol))))
-     `(evaluate
-       (cl:make-instance 'function
-        :sexp ',whole-sexp
-        :closure (cl:lambda ()
-                   (cl:function
-                    ,(cl:find-symbol
-                      (cl:symbol-name thing)
-                      :common-lisp))))))
-    (t
-     `(evaluate
-       (cl:make-instance 'function
-        :sexp ',whole-sexp
-        :closure (cl:lambda () (cl:function ,@(cl:rest whole-sexp))))))))
+  (cl:let ((wrapped-function-form
+            (cl:cond
+              ((cl:and (cl:listp thing)
+                       (cl:eql (cl:first thing) 'lambda))
+               `(cl:function (cl:lambda ,@(cl:rest thing))))
+              ((cl:and (cl:symbolp thing)
+                       (cl:multiple-value-bind (cl-symbol foundp)
+                           (cl:find-symbol (cl:symbol-name thing) :common-lisp)
+                         (cl:and foundp (cl:fboundp cl-symbol))))
+               `(cl:function ,(cl:find-symbol (cl:symbol-name thing) :common-lisp)))
+              (t
+               `(cl:function ,@(cl:rest whole-sexp))))))
+    `(evaluate
+      (cl:make-instance 'function
+       :sexp ',whole-sexp
+       :closure (cl:lambda () ,wrapped-function-form)))))

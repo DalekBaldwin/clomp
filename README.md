@@ -14,17 +14,17 @@ This project is intended to be a jumping-off point for exploring a number of dif
                           :+))
 
 (let ((depth 0))
-  (defmethod clomp:evaluate :around (form)
+  (defmethod clomp:evaluate :around ((form clomp:form))
              (let ((dashes
                     (with-output-to-string (s)
                       (dotimes (i depth)
                         (princ "--" s)))))
                (format t "~&-~A> ~A~%" dashes (clomp:sexp form))
                (incf depth)
-               (let ((result (call-next-method)))
+               (let ((result (multiple-value-list (call-next-method))))
                  (decf depth)
                  (format t "~&<-~A ~A: ~A~%" dashes (clomp:sexp form) result)
-                 result))))
+                 (values-list result)))))
 
 (defmethod clomp:evaluate :before ((form clomp:if))
   (format t "~&(This is an if-form!)~%"))

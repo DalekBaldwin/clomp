@@ -23,7 +23,7 @@ This project is intended to be a jumping-off point for exploring a number of dif
                (incf depth)
                (let ((result (multiple-value-list (call-next-method))))
                  (decf depth)
-                 (format t "~&<-~A ~A: ~A~%" dashes (clomp:sexp form) result)
+                 (format t "~&<-~A ~A: ~{~A~^, ~}~%" dashes (clomp:sexp form) result)
                  (values-list result)))))
 
 (defmethod clomp:evaluate :before ((form clomp:if))

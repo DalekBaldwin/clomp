@@ -73,7 +73,6 @@ As Clomp demonstrates, this is not too difficult.
 ... i.e., this technique is vulnerable to many of the same pitfalls as writing a code walker -- it's not an inherently bad idea, but it's generally ill-advised to roll your own for use in a one-off project. For this reason Clomp only encloses complete special forms and built-in macros, but a finer-grained approach could be used enclose their evaluated subforms, e.g. the test, then, and else clauses of an if-form. (For built-in-function forms, however, Clomp wraps each argument in a closure, as seen in the example above.) This resembles the process of writing a metacircular interpreter, but from a different vantage point. The underlying Common Lisp implementation is in the driver's seat, and it only calls out to your reflective variants at the lexical locations you've declared interest in, so you don't pay for what you don't use and you can test how your interpreter interacts with the rest of the language with the benefit of all the optimizations your implementation already provides. You might call it "just-in-time interpretation". I'm experimenting with a few different approaches to this at the moment.
 
 Notes:
-At present, wrapped forms returning multiple values only have the first value passed through the wrapper.
 There may be issues involving certain special forms no longer receiving special treatment as top-level forms by the underlying implementation.
 
 [1]:https://github.com/vsedach

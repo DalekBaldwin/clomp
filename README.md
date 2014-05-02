@@ -42,6 +42,8 @@ This project is intended to be a jumping-off point for exploring a number of dif
        (* x y))))
 ```
 
+This prints:
+
 ```
 -> (LET ((X 2) (Y 3))
         (VALUES (IF (< X Y) (+ X (* X Y)) (- X Y))
@@ -71,11 +73,13 @@ I took the phrase "closure-oriented metaprogramming" from [Vladimir Sedach] [1]'
 
 > The first is the fact that we had to shadow `=` in our package. Common Lisp forbids the redefinition of the functions, macros and special forms defined in the standard, so we have to go out of our way if we want to achieve that effect.
 
-As Clomp demonstrates, this is not too difficult, and far from being a kludge, it's actually a quite natural design pattern in the creation of generic interpretation and analysis tools when we want enough flexibility to let the user decide whether to delegate a particular fragment of a computation to the underlying implementation.
+As Clomp demonstrates, this is not too difficult, and far from being a kludge, it's actually a quite natural design pattern in the creation of generic interpretation and analysis tools when we want enough flexibility to let the user decide whether to delegate a particular fragment of a computation to the underlying Common Lisp implementation.
 
 > The second is the fact that Common Lisp has so many special forms and macros - `and` just happens to be one of them. Smalltalk avoids this problem by doing virtually everything via message passing and closures. In Common Lisp we don't have this straightjacket, but we also don't have this luxury of assuming that everything is an object or a closure.
 
-... i.e., to make this approach fully general, you have do something akin to writing a code walker -- it's not an inherently bad idea, but it's generally ill-advised to roll your own for use in a one-off project. For this reason, at present Clomp only encloses complete special forms and built-in macros*, but a finer-grained approach could be used to enclose their evaluated subforms, e.g. the test, then, and else clauses of an `if`-form. (For built-in-function forms, however, Clomp wraps each argument expression in a closure, as seen in the example above.) This resembles the process of writing a metacircular interpreter, but from a different vantage point. The underlying Common Lisp implementation is in the driver's seat, and it only calls out to your reflective variants at the lexical locations you've declared interest in, so you don't pay for what you don't use and you can test how your interpreter interacts with the rest of the language with the benefit of all the optimizations your implementation already provides. It's like just-in-time compilation, except it's just-in-time interpretation. (Which in turn, I guess, the underlying implementation is free to compile if it wants.) I'm experimenting with a few different approaches to this at the moment.
+... i.e., to make this approach fully general, you have do something akin to writing a code walker -- it's not an inherently bad idea, but it's generally ill-advised to roll your own for use in a one-off project. For this reason, at present Clomp only encloses complete special forms and built-in macros*, but a finer-grained approach could be used to enclose their evaluated subforms, e.g. the test, then, and else clauses of an `if`-form. (For built-in-function forms, however, Clomp wraps each argument expression in a closure, as seen in the example above.) This resembles the process of writing a metacircular interpreter, but from a different vantage point. The underlying implementation is in the driver's seat, and it only calls out to your reflective variants at the lexical locations you've declared interest in, so you don't pay for what you don't use and you can test how your interpreter interacts with the rest of the language with the benefit of all the optimizations your implementation already provides. It's like just-in-time compilation, except it's just-in-time interpretation. (Which in turn, I guess, the underlying implementation is free to compile if it wants.) I'm experimenting with a few different approaches to this at the moment.
+
+---
 
 *We still run into some issues with forms that must appear as top-level forms to be handled correctly, setf-expansions, and the condition system. I'm still investigating whether some or all of these can be elegantly managed without too many implementation-specific kludges.
 

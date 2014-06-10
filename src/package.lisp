@@ -55,13 +55,27 @@
       ,@(loop for symbol in *shadowed-functions-and-macros*
            collect (intern (symbol-name symbol) :keyword)))))
 
-(defpackage :clomp
+(defpackage :clomp-shadow
   (:use :cl)
   #.`(:shadow
       ,@(loop for symbol being the external-symbols of :common-lisp
            when (or (fboundp symbol)
                     (special-operator-p symbol))
            collect (intern (symbol-name symbol) :keyword)))
+  #.`(:export
+      ,@(loop for symbol being the external-symbols of :common-lisp
+           when (or (fboundp symbol)
+                    (special-operator-p symbol))
+           collect (intern (symbol-name symbol) :keyword))))
+
+(defpackage :clomp
+  (:use :cl :contextl)
+  
+  ;;#.`(:shadow
+  ;;    ,@(loop for symbol being the external-symbols of :common-lisp
+  ;;         when (or (fboundp symbol)
+  ;;                  (special-operator-p symbol))
+  ;;         collect (intern (symbol-name symbol) :keyword)))
   
   #.`(:export
       :form
@@ -112,11 +126,14 @@
       :cond-test
       :cond-then
       
-      ,@(remove-if (constantly nil);;(lambda (x) (member x *unshadowed-symbols*))
-                   (loop for symbol being the external-symbols of :common-lisp
-                      when (or (fboundp symbol)
-                               (special-operator-p symbol))
-                      collect (intern (symbol-name symbol) :keyword)))))
+      :function-path-graph
+      
+      ;;,@(remove-if (constantly nil);;(lambda (x) (member x *unshadowed-symbols*))
+      ;;             (loop for symbol being the external-symbols of :common-lisp
+      ;;                when (or (fboundp symbol)
+      ;;                         (special-operator-p symbol))
+      ;;                collect (intern (symbol-name symbol) :keyword)))
+      ))
 
 (defpackage :clomp-implementation
   (:use :cl :contextl))
@@ -130,4 +147,4 @@
       (:dispatch-macro-char #\# #\'
                             (lambda (stream subchar arg)
                               (declare (ignore subchar arg))
-                              `(clomp:function ,(read stream t nil t)))))))
+                              `(clomp-shadow:function ,(read stream t nil t)))))))

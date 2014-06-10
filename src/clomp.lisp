@@ -1,44 +1,44 @@
-(in-package :clomp-implementation)
+(in-package :clomp)
 
-(defclass clomp:form ()
-  ((clomp:sexp
-    :accessor clomp:sexp
+(defclass form ()
+  ((sexp
+    :accessor sexp
     :initarg :sexp)
-   (clomp:closure
-    :accessor clomp:closure
+   (closure
+    :accessor closure
     :initarg :closure)
-   (clomp:static-closure
-    :accessor clomp:static-closure
+   (static-closure
+    :accessor static-closure
     :initarg :static-closure)))
 
 
 
-(defclass clomp:lexical-form (clomp:form) ())
-(defclass clomp:special-operator (clomp:lexical-form) ())
-(defclass clomp:macro (clomp:lexical-form) ())
-(defclass clomp:invocation (clomp:lexical-form) ())
-(defclass clomp:user-function (clomp:invocation) ())
-(defclass clomp:value (clomp:lexical-form) ())
+(defclass lexical-form (form) ())
+(defclass special-operator (lexical-form) ())
+(defclass macro (lexical-form) ())
+(defclass invocation (lexical-form) ())
+(defclass user-function (invocation) ())
+(defclass value (lexical-form) ())
 
 
 
-(define-layered-function clomp:evaluate (form)
-  (:method ((form clomp:form))
-    (funcall (clomp:closure form))))
+(define-layered-function evaluate (form)
+  (:method ((form form))
+    (funcall (closure form))))
 
-(deflayer clomp:static-layer)
+(deflayer static-layer)
 
-(define-layered-method clomp:evaluate
-  :in-layer clomp:static-layer
-  :around ((form clomp:form))
+(define-layered-method evaluate
+  :in-layer static-layer
+  :around ((form form))
   (append (list form)
-        (funcall (clomp:static-closure form))))
+        (funcall (static-closure form))))
 
-(deflayer clomp:funarg)
+(deflayer funarg)
 
 (define-closure-wrappers)
 
-(defmacro clomp:function (&whole whole-sexp thing)
+(defmacro clomp-shadow:function (&whole whole-sexp thing)
   (let ((wrapped-function-form
          (cond
            ((and (listp thing)
@@ -46,7 +46,7 @@
                   ;; this should work regardless of whether the user has shadow
                   ;; shadow imported our lambda wrapper
                   (eql (first thing) 'lambda)
-                  (eql (first thing) 'clomp:lambda)))
+                  (eql (first thing) 'clomp-shadow:lambda)))
             `(function (lambda ,@(rest thing))))
            ((and (symbolp thing)
                  (multiple-value-bind (cl-symbol foundp)
@@ -55,172 +55,132 @@
             `(function ,(find-symbol (symbol-name thing) :common-lisp)))
            (t
             `(function ,@(rest whole-sexp))))))
-    `(clomp:evaluate
-      (make-instance 'clomp:function
+    `(evaluate
+      (make-instance 'clomp-shadow:function
        :sexp ',whole-sexp
        :closure (lambda () ,wrapped-function-form)))))
 
-(deflayer clomp:block-form)
+(deflayer block-form)
 
-(defmacro clomp:block (&whole whole-sexp name &rest forms)
-  `(clomp:evaluate
-    (make-instance 'clomp:block
+(defmacro clomp-shadow:block (&whole whole-sexp name &rest forms)
+  `(evaluate
+    (make-instance 'clomp-shadow:block
      :sexp ',whole-sexp
      :closure
      (lambda ()
        (block ,name
          ,@(loop for form in forms
-              collect `(with-active-layers (clomp:block-form)
+              collect `(with-active-layers (block-form)
                          ,form)))))))
 
-(deflayer clomp:catch-body)
+(deflayer catch-body)
 
-(defmacro clomp:catch (&whole whole-sexp tag &body body)
-  `(clomp:evaluate
-    (make-instance 'clomp:catch
+(defmacro clomp-shadow:catch (&whole whole-sexp tag &body body)
+  `(evaluate
+    (make-instance 'clomp-shadow:catch
      :sexp ',whole-sexp
      :closure
      (lambda ()
        (catch ,tag
-         (with-active-layers (clomp:catch-body) ,@body))))))
+         (with-active-layers (catch-body) ,@body))))))
 
-(deflayer clomp:eval-when-body)
+(deflayer eval-when-body)
 
-(defmacro clomp:eval-when (&whole whole-sexp (&rest situations) &rest body)
+(defmacro clomp-shadow:eval-when (&whole whole-sexp (&rest situations) &rest body)
   `(eval-when ,situations
-     (clomp:evaluate
-      (make-instance 'clomp:eval-when
+     (evaluate
+      (make-instance 'clomp-shadow:eval-when
        :sexp ',whole-sexp
        :closure
        (lambda ()
-         (with-active-layers (clomp:eval-when-body)
+         (with-active-layers (eval-when-body)
            ,@body))))))
 
-(deflayer clomp:flet-body)
+(deflayer flet-body)
 
-(defmacro clomp:flet (&whole whole-sexp definitions &body body)
-  `(clomp:evaluate
-    (make-instance 'clomp:flet
+(defmacro clomp-shadow:flet (&whole whole-sexp definitions &body body)
+  `(evaluate
+    (make-instance 'clomp-shadow:flet
      :sexp ',whole-sexp
      :closure
      (lambda ()
        (flet ,definitions
-         (with-active-layers (clomp:flet-body)
+         (with-active-layers (flet-body)
            ,@body))))))
 
 ;; nothing to do...
 #+nil
-(defmacro clomp:go (&whole whole-sexp tag))
+(defmacro clomp-shadow:go (&whole whole-sexp tag))
 
-#+nil
-(defclass clomp:if-test (clomp:form) ())
+(deflayer if-test)
+(deflayer if-then)
+(deflayer if-else)
 
-#+nil
-(defmacro clomp::if-test (form)
-  `(clomp:evaluate
-    (make-instance 'clomp:if-test
-     :sexp '(_if-test_ ,form)
-     :closure (lambda () ,form))))
-
-#+nil
-(defclass clomp:if-then (clomp:form) ())
-
-#+nil
-(defmacro clomp::if-then (form)
-  `(clomp:evaluate
-    (make-instance 'clomp:if-then
-     :sexp '(_if-then_ ,form)
-     :closure (lambda () ,form))))
-
-#+nil
-(defclass clomp:if-else (clomp:form) ())
-
-#+nil
-(defmacro clomp::if-else (form)
-  `(clomp:evaluate
-    (make-instance 'clomp:if-else
-     :sexp '(_if-else_ ,form)
-     :closure (lambda () ,form))))
-
-#+nil
-(defmacro clomp:if (&whole whole-sexp test then &optional else)
-  `(clomp:evaluate
-    (make-instance 'clomp:if
+(defmacro clomp-shadow:if (&whole whole-sexp test then &optional else)
+  `(evaluate
+    (make-instance 'clomp-shadow:if
      :sexp ',whole-sexp
      :closure (lambda ()
-                (if (clomp::if-test ,test)
-                    (clomp::if-then ,then)
-                    (clomp::if-else ,else))))))
-
-(deflayer clomp:if-test)
-(deflayer clomp:if-then)
-(deflayer clomp:if-else)
-
-(defmacro clomp:if (&whole whole-sexp test then &optional else)
-  `(clomp:evaluate
-    (make-instance 'clomp:if
-     :sexp ',whole-sexp
-     :closure (lambda ()
-                (if (with-active-layers (clomp:if-test) ,(maybe-value test))
-                    (with-active-layers (clomp:if-then) ,(maybe-value then))
-                    (with-active-layers (clomp:if-else) ,(maybe-value else))))
+                (if (with-active-layers (if-test) ,(maybe-value test))
+                    (with-active-layers (if-then) ,(maybe-value then))
+                    (with-active-layers (if-else) ,(maybe-value else))))
      :static-closure (lambda ()
                        (list
-                        (with-active-layers (clomp:if-test) ,(maybe-value test))
-                        (with-active-layers (clomp:if-then) ,(maybe-value then))
-                        (with-active-layers (clomp:if-else) ,(maybe-value else)))))))
+                        (with-active-layers (if-test) ,(maybe-value test))
+                        (with-active-layers (if-then) ,(maybe-value then))
+                        (with-active-layers (if-else) ,(maybe-value else)))))))
 
-(deflayer clomp:labels-body)
+(deflayer labels-body)
 
-(defmacro clomp:labels (&whole whole-sexp definitions &body body)
-  `(clomp:evaluate
-    (make-instance 'clomp:labels
+(defmacro clomp-shadow:labels (&whole whole-sexp definitions &body body)
+  `(evaluate
+    (make-instance 'clomp-shadow:labels
      :sexp ',whole-sexp
      :closure
      (lambda ()
        (labels ,definitions
-         (with-active-layers (clomp:labels-body)
+         (with-active-layers (labels-body)
            ,@body))))))
 
 #+nil
-(defclass clomp:let-init-form (clomp:form) ())
+(defclass let-init-form (form) ())
 
 #+nil
-(defmacro clomp::let-init-form (form)
-  `(clomp:evaluate
-    (make-instance 'clomp:let-init-form
+(defmacro :let-init-form (form)
+  `(evaluate
+    (make-instance 'let-init-form
      :sexp ',form
      :closure (lambda () ,form))))
 
 #+nil
-(defclass clomp:let-body (clomp:form) ())
+(defclass let-body (form) ())
 
 #+nil
-(defmacro clomp::let-body (&body body)
-  `(clomp:evaluate
-    (make-instance 'clomp:let-body
+(defmacro :let-body (&body body)
+  `(evaluate
+    (make-instance 'let-body
      :sexp '(_implicit-progn_ ,@body)
      :closure (lambda ()
                 ,@body))))
 
 #+nil
-(defmacro clomp:let (&whole whole-sexp bindings &body body)
-  `(clomp:evaluate
-    (make-instance 'clomp:let
+(defmacro let (&whole whole-sexp bindings &body body)
+  `(evaluate
+    (make-instance 'let
      :sexp ',whole-sexp
      :closure (lambda ()
                 (let (,@(loop for binding in bindings
                            collect `(,(first binding)
-                                      (clomp::let-init-form
+                                      (:let-init-form
                                         ,(second binding)))))
-                  (clomp::let-body ,@body))))))
+                  (:let-body ,@body))))))
 
-(deflayer clomp:let-init-form)
-(deflayer clomp:let-body)
+(deflayer let-init-form)
+(deflayer let-body)
 
-(defmacro clomp:let (&whole whole-sexp bindings &body body)
-  `(clomp:evaluate
-    (make-instance 'clomp:let
+(defmacro clomp-shadow:let (&whole whole-sexp bindings &body body)
+  `(evaluate
+    (make-instance 'clomp-shadow:let
      :sexp ',whole-sexp
      :closure
      (lambda ()
@@ -229,16 +189,16 @@
                     (if (atom binding)
                         binding
                         `(,(first binding)
-                           (with-active-layers (clomp:let-init-form)
+                           (with-active-layers (let-init-form)
                              ,(second binding))))))
-         (with-active-layers (clomp:let-body) ,@body))))))
+         (with-active-layers (let-body) ,@body))))))
 
-(deflayer clomp:let*-init-form)
-(deflayer clomp:let*-body)
+(deflayer let*-init-form)
+(deflayer let*-body)
 
-(defmacro clomp:let* (&whole whole-sexp bindings &body body)
-  `(clomp:evaluate
-    (make-instance 'clomp:let*
+(defmacro clomp-shadow:let* (&whole whole-sexp bindings &body body)
+  `(evaluate
+    (make-instance 'clomp-shadow:let*
      :sexp ',whole-sexp
      :closure
      (lambda ()
@@ -247,146 +207,146 @@
                      (if (atom binding)
                          binding
                          `(,(first binding)
-                            (with-active-layers (clomp:let*-init-form)
+                            (with-active-layers (let*-init-form)
                               ,(second binding))))))
-         (with-active-layers (clomp:let*-body) ,@body))))))
+         (with-active-layers (let*-body) ,@body))))))
 
-(deflayer clomp:load-time-value-form)
+(deflayer load-time-value-form)
 
-(defmacro clomp:load-time-value (&whole whole-sexp form &optional read-only-p)
-  `(clomp:evaluate
-    (make-instance 'clomp:load-time-value
+(defmacro clomp-shadow:load-time-value (&whole whole-sexp form &optional read-only-p)
+  `(evaluate
+    (make-instance 'clomp-shadow:load-time-value
      :sexp ',whole-sexp
      :closure
      (lambda ()
        (load-time-value ,form ,read-only-p)))))
 
-(deflayer clomp:locally-body)
+(deflayer locally-body)
 
 
 ;; ... what to do?
 #+nil
-(defmacro clomp:locally (&whole whole-sexp &body body))
+(defmacro clomp-shadow:locally (&whole whole-sexp &body body))
 
-(deflayer clomp:macrolet-body)
+(deflayer macrolet-body)
 
-(defmacro clomp:macrolet (&whole whole-sexp definitions &rest body)
-  `(clomp:evaluate
-    (make-instance 'clomp:macrolet
+(defmacro clomp-shadow:macrolet (&whole whole-sexp definitions &rest body)
+  `(evaluate
+    (make-instance 'clomp-shadow:macrolet
      :sexp ',whole-sexp
      :closure
      (lambda ()
        (macrolet ,definitions
-         (with-active-layers (clomp:macrolet-body)
+         (with-active-layers (macrolet-body)
            ,@body))))))
 
-(deflayer clomp:multiple-value-call-function)
-(deflayer clomp:multiple-value-call-argument)
+(deflayer multiple-value-call-function)
+(deflayer multiple-value-call-argument)
 
-(defmacro clomp:multiple-value-call (&whole whole-sexp function &rest arguments)
-  `(clomp:evaluate
-    (make-instance 'clomp:multiple-value-call
+(defmacro clomp-shadow:multiple-value-call (&whole whole-sexp function &rest arguments)
+  `(evaluate
+    (make-instance 'clomp-shadow:multiple-value-call
      :sexp ',whole-sexp
      :closure
      (lambda ()
        (multiple-value-call
-           (with-active-layers (clomp:multiple-value-call-function)
+           (with-active-layers (multiple-value-call-function)
              ,function)
          ,@(loop for argument in arguments
-                collect `(with-active-layers (clomp:multiple-value-call-argument)
+                collect `(with-active-layers (multiple-value-call-argument)
                            ,argument)))))))
 
-(deflayer clomp:multiple-value-prog1-values-form)
-(deflayer clomp:multiple-value-prog1-forms)
+(deflayer multiple-value-prog1-values-form)
+(deflayer multiple-value-prog1-forms)
 
-(defmacro clomp:multiple-value-prog1 (&whole whole-sexp values-form &rest forms)
-  `(clomp:evaluate
-    (make-instance 'clomp:multiple-value-prog1
+(defmacro clomp-shadow:multiple-value-prog1 (&whole whole-sexp values-form &rest forms)
+  `(evaluate
+    (make-instance 'clomp-shadow:multiple-value-prog1
      :sexp ',whole-sexp
      :closure
      (lambda ()
        (multiple-value-prog1
-           (with-active-layers (clomp:multiple-value-prog1-values-form)
+           (with-active-layers (multiple-value-prog1-values-form)
              ,values-form)
-         (with-active-layers (clomp:multiple-value-prog1-forms)
+         (with-active-layers (multiple-value-prog1-forms)
            ,@forms))))))
 
-(deflayer clomp:progn-forms)
+(deflayer progn-forms)
 
-(defmacro clomp:progn (&whole whole-sexp &rest forms)
-  `(clomp:evaluate
-    (make-instance 'clomp:progn
+(defmacro clomp-shadow:progn (&whole whole-sexp &rest forms)
+  `(evaluate
+    (make-instance 'clomp-shadow:progn
      :sexp ',whole-sexp
      :closure
      (lambda ()
-       (with-active-layers (clomp:progn-forms)
+       (with-active-layers (progn-forms)
          ,@forms)))))
 
-(deflayer clomp:progv-symbols)
-(deflayer clomp:progv-values)
-(deflayer clomp:progv-forms)
+(deflayer progv-symbols)
+(deflayer progv-values)
+(deflayer progv-forms)
 
-(defmacro clomp:progv (&whole whole-sexp vars vals &body body)
-  `(clomp:evaluate
-    (make-instance 'clomp:progv
+(defmacro clomp-shadow:progv (&whole whole-sexp vars vals &body body)
+  `(evaluate
+    (make-instance 'clomp-shadow:progv
      :sexp ',whole-sexp
      :closure
      (lambda ()
        (progv
-           (with-active-layers (clomp:progv-symbols)
+           (with-active-layers (progv-symbols)
              ,vars)
-           (with-active-layers (clomp:progv-values)
+           (with-active-layers (progv-values)
              ,vals)
-         (with-active-layers (clomp:progv-forms)
+         (with-active-layers (progv-forms)
            ,@body))))))
 
 ;; nothing to do here?
 #+nil
-(defmacro clomp:quote (&whole whole-sexp thing))
+(defmacro clomp-shadow:quote (&whole whole-sexp thing))
 
-(deflayer clomp:return-from-value)
+(deflayer return-from-value)
 
-(defmacro clomp:return-from (&whole whole-sexp name &optional value)
-  `(clomp:evaluate
-    (make-instance 'clomp:return-from
+(defmacro clomp-shadow:return-from (&whole whole-sexp name &optional value)
+  `(evaluate
+    (make-instance 'clomp-shadow:return-from
      :sexp ',whole-sexp
      :closure
      (lambda ()
        (return-from ,name
-         (with-active-layers (clomp:return-from-value)
+         (with-active-layers (return-from-value)
            ,value))))))
 
-(deflayer clomp:setq-form)
+(deflayer setq-form)
 
-(defmacro clomp:setq (&whole whole-sexp &rest things)
-  `(clomp:evaluate
-    (make-instance 'clomp:setq
+(defmacro clomp-shadow:setq (&whole whole-sexp &rest things)
+  `(evaluate
+    (make-instance 'clomp-shadow:setq
      :sexp ',whole-sexp
      :closure
      (lambda ()
        (setq
         ,@(loop for (var form) on things by #'cddr
              collect var
-             collect `(with-active-layers (clomp:setq-form)
+             collect `(with-active-layers (setq-form)
                         ,form)))))))
 
-(deflayer clomp:symbol-macrolet-body)
+(deflayer symbol-macrolet-body)
 
-(defmacro clomp:symbol-macrolet (&whole whole-sexp macrobindings &body body)
-  `(clomp:evaluate
-    (make-instance 'clomp:symbol-macrolet
+(defmacro clomp-shadow:symbol-macrolet (&whole whole-sexp macrobindings &body body)
+  `(evaluate
+    (make-instance 'clomp-shadow:symbol-macrolet
      :sexp ',whole-sexp
      :closure
      (lambda ()
        (symbol-macrolet ,macrobindings
-         (with-active-layers (clomp:symbol-macrolet-body)
+         (with-active-layers (symbol-macrolet-body)
            ,@body))))))
 
-(deflayer clomp:tagbody-form)
+(deflayer tagbody-form)
 
-(defmacro clomp:tagbody (&whole whole-sexp &rest statements)
-  `(clomp:evaluate
-    (make-instance 'clomp:tagbody
+(defmacro clomp-shadow:tagbody (&whole whole-sexp &rest statements)
+  `(evaluate
+    (make-instance 'clomp-shadow:tagbody
      :sexp ',whole-sexp
      :closure
      (lambda ()
@@ -395,65 +355,65 @@
                  collect
                  (if (atom statement)
                      statement
-                     `(with-active-layers (clomp:tagbody-form)
+                     `(with-active-layers (tagbody-form)
                         ,statement))))))))
 
-(deflayer clomp:the-form)
+(deflayer the-form)
 
-(defmacro clomp:the (&whole whole-sexp value-type form)
-  `(clomp:evaluate
-    (make-instance 'clomp:the
+(defmacro clomp-shadow:the (&whole whole-sexp value-type form)
+  `(evaluate
+    (make-instance 'clomp-shadow:the
      :sexp ',whole-sexp
      :closure
      (lambda ()
        (the ,value-type
-            (with-active-layers (clomp:the-form)
+            (with-active-layers (the-form)
               ,form))))))
 
-(deflayer clomp:throw-result)
+(deflayer throw-result)
 
-(defmacro clomp:throw (&whole whole-sexp tag result)
-  `(clomp:evaluate
-    (make-instance 'clomp:throw
+(defmacro clomp-shadow:throw (&whole whole-sexp tag result)
+  `(evaluate
+    (make-instance 'clomp-shadow:throw
      :sexp ',whole-sexp
      :closure
      (lambda ()
-       (throw ,tag (with-active-layers (clomp:throw-result)
+       (throw ,tag (with-active-layers (throw-result)
                      ,result))))))
 
-(deflayer clomp:unwind-protect-protected)
-(deflayer clomp:unwind-protect-cleanup)
+(deflayer unwind-protect-protected)
+(deflayer unwind-protect-cleanup)
 
-(defmacro clomp:unwind-protect (&whole whole-sexp protected &body cleanup)
-  `(clomp:evaluate
-    (make-instance 'clomp:unwind-protect
+(defmacro clomp-shadow:unwind-protect (&whole whole-sexp protected &body cleanup)
+  `(evaluate
+    (make-instance 'clomp-shadow:unwind-protect
      :sexp ',whole-sexp
      :closure
      (lambda ()
        (unwind-protect
-            (with-active-layers (clomp:unwind-protect-protected)
+            (with-active-layers (unwind-protect-protected)
               ,protected)
-         (with-active-layers (clomp:unwind-protect-cleanup)
+         (with-active-layers (unwind-protect-cleanup)
            ,@cleanup))))))
 
 
 
 ;;;; MODIFY-MACROS
 
-(define-simple-wrapper clomp:setf (&rest args)
+(define-simple-wrapper clomp-shadow:setf (&rest args)
   `(setf ,@(loop for (place form) on args by #'cddr
               collect (sanitize-accessor place)
               collect form)))
 
-(define-simple-wrapper clomp:psetf (&rest args)
+(define-simple-wrapper clomp-shadow:psetf (&rest args)
   `(psetf ,@(loop for (place form) on args by #'cddr
                collect (sanitize-accessor place)
                collect form)))
 
 #+nil
-(defmacro clomp:psetq (&whole whole-sexp &rest things)
-  `(clomp:evaluate
-    (make-instance 'clomp:psetq
+(defmacro clomp-shadow:psetq (&whole whole-sexp &rest things)
+  `(evaluate
+    (make-instance 'clomp-shadow:psetq
      :sexp ',whole-sexp
      :closure
      (lambda ()
@@ -462,72 +422,66 @@
              collect var
              collect form))))))
 
-(define-simple-wrapper clomp:incf (place &optional (delta 1))
+(define-simple-wrapper clomp-shadow:incf (place &optional (delta 1))
   `(incf ,(sanitize-accessor place) ,delta))
 
-(define-simple-wrapper clomp:decf (place &optional (delta 1))
+(define-simple-wrapper clomp-shadow:decf (place &optional (delta 1))
   `(decf ,(sanitize-accessor place) ,delta))
 
-(define-simple-wrapper clomp:remf (place indicator)
+(define-simple-wrapper clomp-shadow:remf (place indicator)
   `(remf ,(sanitize-accessor place) ,indicator))
 
-(define-simple-wrapper clomp:rotatef (&rest args)
+(define-simple-wrapper clomp-shadow:rotatef (&rest args)
   `(rotatef ,@(mapcar #'sanitize-accessor args)))
 
-(define-simple-wrapper clomp:shiftf (&rest args)
+(define-simple-wrapper clomp-shadow:shiftf (&rest args)
   `(shiftf ,@(mapcar #'sanitize-accessor (butlast args)) ,@(last args)))
 
-(define-simple-wrapper clomp:push (obj place)
+(define-simple-wrapper clomp-shadow:push (obj place)
   `(push ,obj ,(sanitize-accessor place)))
 
-(define-simple-wrapper clomp:pushnew (obj place &rest keys)
+(define-simple-wrapper clomp-shadow:pushnew (obj place &rest keys)
   `(pushnew ,obj ,(sanitize-accessor place) ,@keys))
 
-(define-simple-wrapper clomp:pop (place)
+(define-simple-wrapper clomp-shadow:pop (place)
   `(pop ,(sanitize-accessor place)))
 
 
 ;;;;
 
-(deflayer clomp:cond-test)
-(deflayer clomp:cond-then)
+(deflayer cond-test)
+(deflayer cond-then)
 
-(defmacro clomp:cond (&whole whole-sexp &rest clauses)
-  `(clomp:evaluate
-    (make-instance 'clomp:cond
+(defmacro clomp-shadow:cond (&whole whole-sexp &rest clauses)
+  `(evaluate
+    (make-instance 'clomp-shadow:cond
      :sexp ',whole-sexp
      :closure (lambda ()
                 (cond
                   ,@(loop for clause in clauses
                          collect 
-                         `((with-active-layers (clomp:cond-test)
+                         `((with-active-layers (cond-test)
                              ,(maybe-value (first clause)))
-                           (with-active-layers (clomp:cond-then)
+                           (with-active-layers (cond-then)
                              ,(maybe-value (second clause)))))))
      :static-closure (lambda ()
                        (list
                         ,@(loop for clause in clauses
-                               collect `(with-active-layers (clomp:cond-test)
+                               collect `(with-active-layers (cond-test)
                                           ,(maybe-value (first clause)))
-                               collect `(with-active-layers (clomp:cond-then)
+                               collect `(with-active-layers (cond-then)
                                           ,(maybe-value (second clause)))))))))
 
-(defmacro clomp::defun* (&whole whole-sexp name args &body body)
+(defmacro defun* (&whole whole-sexp name args &body body)
   `(defun ,name ,args
-     (clomp:evaluate
-      (make-instance 'clomp:user-function
+     (evaluate
+      (make-instance 'user-function
        :sexp (list ',name ,@args)
        :closure
        (lambda ()
          ,@body)))))
 
-#+nil
-(defmacro clomp:defpackage (package &rest options)
-  (let ((clomp-package-symbol (intern format nil "CLOMP.PACKAGE.~A" (symbol-name package))))
-    `(defpackage ,clomp-package-symbol
-       ,@options)))
-
-(defmacro clomp:defun (&whole whole-sexp name args &body body)
+(defmacro clomp-shadow:defun (&whole whole-sexp name args &body body)
   (let* (;;(internal-name (intern (format nil "+~A-INTERNAL+" (symbol-name name))))
          (internal-package-name (format nil "CLOMP.PACKAGE.~A" (package-name (symbol-package name))))
          (real-symbol (intern (format nil "~A" name)
@@ -536,8 +490,8 @@
                                (make-package internal-package-name)))))
     `(progn
        (defmacro ,name (&whole whole-sexp ,@args)
-         `(clomp:evaluate
-           (make-instance 'clomp:user-function
+         `(evaluate
+           (make-instance 'user-function
             :sexp ',whole-sexp
             :closure
             (lambda ()
@@ -545,7 +499,7 @@
               (,',real-symbol
                ,@(loop for arg in (list ,@args)
                     collect
-                      `(with-active-layers (clomp:funarg)
+                      `(with-active-layers (funarg)
                          ,(maybe-value arg)))))
             :static-closure
             (lambda ()
@@ -558,7 +512,7 @@
        (let ((static-stuff
               (list
                ,@(loop for thing in body
-                      collect `(with-active-layers (clomp:static-layer)
+                      collect `(with-active-layers (static-layer)
                                  ,thing)))))
          (dft static-stuff
               (lambda (stuff)
@@ -571,7 +525,7 @@
 
 (defgeneric record-call (parent child)
   (:method (parent child))
-  (:method (parent (child clomp:invocation))
+  (:method (parent (child invocation))
     (pushnew (class-name (class-of child)) (gethash parent *callers*)))
-  (:method (parent (child clomp:user-function))
-    (pushnew (first (clomp:sexp child)) (gethash parent *callers*))))
+  (:method (parent (child user-function))
+    (pushnew (first (sexp child)) (gethash parent *callers*))))

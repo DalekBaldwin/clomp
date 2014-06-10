@@ -1,4 +1,4 @@
-(in-package :clomp-implementation)
+(in-package :clomp)
 
 (defun sanitize-accessor (form)
   (cond ((atom form) form)
@@ -6,7 +6,7 @@
                             (symbol-name (first form))
                             :common-lisp))
               (member (symbol-package (first form))
-                      (list (find-package :clomp)
+                      (list (find-package :clomp-shadow)
                             (find-package :common-lisp))))
          `(,(find-symbol (symbol-name (first form)) :common-lisp)
             ,@(rest form)))
@@ -16,24 +16,24 @@
   (cond
     ((special-operator-p symbol)
      #+nil
-     ``(with-active-layers (clomp:special-operator)
+     ``(with-active-layers (special-operator)
          ,,body)
      body)
     ((macro-function symbol)
      #+nil
-     ``(with-active-layers (clomp:macro)
+     ``(with-active-layers (macro)
          ,,body)
      body)
     (t
      #+nil
-     ``(with-active-layers (clomp:invocation)
+     ``(with-active-layers (invocation)
          ,,body)
      body)))
 
 (defun maybe-value (arg)
   (if (atom arg)
-      `(clomp:evaluate
-        (make-instance 'clomp:value
+      `(evaluate
+        (make-instance 'value
          :sexp ',arg
          :closure
          (lambda () ,arg)
@@ -52,15 +52,15 @@
                   (defclass ,symbol
                       (,(cond
                          ((special-operator-p cl-symbol)
-                          `clomp:special-operator)
+                          `special-operator)
                          ((macro-function cl-symbol)
-                          `clomp:macro)
+                          `macro)
                          (t
-                          `clomp:invocation))) ())
+                          `invocation))) ())
                   (defmacro ,symbol (&whole whole-sexp &rest args)
                     (declare (ignorable args))
                     ,(wrap-context cl-symbol
-                      ``(clomp:evaluate
+                      ``(evaluate
                          (make-instance ',',symbol
                           :sexp ',whole-sexp
                           :closure
@@ -72,10 +72,10 @@
                                  `(rest whole-sexp)
                                  #+nil
                                  `(loop for arg in args
-                                     collect `(clomp:funarg ,arg))
+                                     collect `(funarg ,arg))
                                  `(loop for arg in args
                                      collect
-                                       `(with-active-layers (clomp:funarg)
+                                       `(with-active-layers (funarg)
                                           ,(maybe-value arg))))))
                           :static-closure
                           (lambda ()
@@ -100,12 +100,12 @@
 
 (defmacro define-closure-wrappers ()
   `(progn
-     ,@(loop for symbol in (package-shadowing-symbols (find-package :clomp))
+     ,@(loop for symbol in (package-shadowing-symbols (find-package :clomp-shadow))
                 collect `(define-closure-wrapper ,symbol))))
 
 (defmacro define-simple-wrapper (symbol args body)
   `(defmacro ,symbol (&whole whole-sexp ,@args)
-     `(clomp:evaluate
+     `(evaluate
        (make-instance ',',symbol
         :sexp ',whole-sexp
         :closure

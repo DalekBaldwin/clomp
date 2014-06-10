@@ -4,6 +4,25 @@
   (:use :cl :asdf))
 (in-package :clomp-system)
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defparameter *unshadowed-symbols*
+    '(:declaim
+      :declare
+      :proclaim
+      :defmacro
+      :defclass
+      :defun
+      :defpackage
+      :defparameter
+      :defvar
+      :handler-bind
+      :handler-case
+      :error
+      :cerror
+      :assert
+      :signal
+      :load)))
+
 (defsystem :clomp
   :name "clomp"
   :serial t
@@ -12,8 +31,10 @@
   ((:static-file "clomp.asd")
    (:module :src
             :components ((:file "package")
-                         (:file "clomp" :depends-on ("package")))))
-  :depends-on (:named-readtables))
+                         (:file "utils")
+                         (:file "clomp"))
+            :serial t))
+  :depends-on (:named-readtables :contextl))
 
 (defsystem :clomp-test
   :name "clomp-test"
@@ -23,3 +44,4 @@
             :components ((:file "package")
                          (:file "clomp-test" :depends-on ("package")))))
   :depends-on (:clomp :stefil))
+

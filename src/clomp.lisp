@@ -1,26 +1,29 @@
 (in-package :clomp)
 
-(defclass form ()
+(defclass continuation ()
+  ((closure
+    :accessor closure
+    :initarg :closure)))
+
+(defclass form (continuation)
   ((sexp
     :accessor sexp
     :initarg :sexp)
-   (closure
-    :accessor closure
-    :initarg :closure)
    (static-closure
     :accessor static-closure
     :initarg :static-closure)))
 
-
-
 (defclass lexical-form (form) ())
+
 (defclass special-operator (lexical-form) ())
 (defclass macro (lexical-form) ())
-(defclass invocation (lexical-form) ())
-(defclass user-function (invocation) ())
+(defclass function-call (lexical-form) ())
+
+(defclass user-function-call (function-call) ())
+
 (defclass value (lexical-form) ())
 
-
+(defclass invocation (continuation) ())
 
 (define-layered-function evaluate (form)
   (:method ((form form))
@@ -475,7 +478,7 @@
 (defmacro defun* (&whole whole-sexp name args &body body)
   `(defun ,name ,args
      (evaluate
-      (make-instance 'user-function
+      (make-instance 'user-function-call
        :sexp (list ',name ,@args)
        :closure
        (lambda ()
@@ -491,7 +494,7 @@
     `(progn
        (defmacro ,name (&whole whole-sexp ,@args)
          `(evaluate
-           (make-instance 'user-function
+           (make-instance 'user-function-call
             :sexp ',whole-sexp
             :closure
             (lambda ()
@@ -525,7 +528,7 @@
 
 (defgeneric record-call (parent child)
   (:method (parent child))
-  (:method (parent (child invocation))
+  (:method (parent (child function-call))
     (pushnew (class-name (class-of child)) (gethash parent *callers*)))
-  (:method (parent (child user-function))
+  (:method (parent (child user-function-call))
     (pushnew (first (sexp child)) (gethash parent *callers*))))

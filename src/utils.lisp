@@ -56,7 +56,7 @@
                          ((macro-function cl-symbol)
                           `macro)
                          (t
-                          `invocation))) ())
+                          `function-call))) ())
                   (defmacro ,symbol (&whole whole-sexp &rest args)
                     (declare (ignorable args))
                     ,(wrap-context cl-symbol

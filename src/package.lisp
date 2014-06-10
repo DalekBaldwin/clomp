@@ -78,18 +78,20 @@
   ;;         collect (intern (symbol-name symbol) :keyword)))
   
   #.`(:export
-      :form
-      :lexical-form
-      :evaluate
-      :sexp
+      :continuation
       :closure
+      :form
+      :sexp
       :static-closure
-      :static-layer
-      :funarg
+      :lexical-form
       :special-operator
       :macro
+      :function-call
+      :user-function-call
       :invocation
-      :user-function
+      :static-layer
+      :evaluate
+      :funarg
       :value
       :block-form
       :catch-body

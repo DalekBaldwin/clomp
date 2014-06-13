@@ -30,16 +30,19 @@
          ,,body)
      body)))
 
-(defun maybe-value (arg)
-  (if (atom arg)
-      `(evaluate
-        (make-instance 'value
-         :sexp ',arg
-         :closure
-         (lambda () ,arg)
-         :static-closure
-         (lambda () (list ',arg))))
-      arg))
+(defun maybe-value (arg ;;&optional env
+                           )
+  (let ((let-in-package-p
+         (find 'clomp-shadow:let (package-shadowing-symbols *package*))))
+    (if (atom arg)
+        `(evaluate
+          (make-instance 'value
+           :sexp ',arg
+           :closure
+           (lambda () ,arg)
+           :static-closure
+           (lambda () (list ',arg))))
+        arg)))
 
 (defmacro define-closure-wrapper (symbol)
   (let ((symbol-name (symbol-name symbol)))
@@ -97,11 +100,6 @@
                   ;; is this legit?
                   ;;(define-symbol-macro ,symbol ,cl-symbol)
                   ))))))
-
-(defmacro define-closure-wrappers ()
-  `(progn
-     ,@(loop for symbol in (package-shadowing-symbols (find-package :clomp-shadow))
-                collect `(define-closure-wrapper ,symbol))))
 
 (defmacro define-simple-wrapper (symbol args body)
   `(defmacro ,symbol (&whole whole-sexp ,@args)

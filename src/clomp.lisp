@@ -23,30 +23,45 @@
 
 (defclass value (lexical-form) ())
 
-(defclass invocation (continuation) ())
+(defclass frame (continuation)
+  ((bindings
+    :accessor bindings
+    :initarg :bindings)))
 
-(define-layered-function evaluate (form)
-  (:method ((form form))
-    (funcall (closure form))))
+(defclass invocation (continuation)
+  ((function-object
+    :accessor function-object
+    :initarg :function-object)
+   (function-args
+    :accessor function-args
+    :initarg :function-args)))
+
+;; should the closure be a slot of the object, or passed as a separate argument to evaluate??
+(define-layered-function evaluate (continuation)
+  (:method ((continuation continuation))
+    (funcall (closure continuation))))
 
 (deflayer static-layer)
 
 (define-layered-method evaluate
   :in-layer static-layer
-  :around ((form form))
+  :around ((form continuation))
   (append (list form)
         (funcall (static-closure form))))
 
 (deflayer funarg)
 
-(define-closure-wrappers)
+#.`(progn
+     ,@(loop for symbol in (package-shadowing-symbols (find-package :clomp-shadow))
+          collect `(define-closure-wrapper ,symbol)))
 
 (defmacro clomp-shadow:function (&whole whole-sexp thing)
+  ;; todo: wrap symbol lookup
   (let ((wrapped-function-form
          (cond
            ((and (listp thing)
                  (or
-                  ;; this should work regardless of whether the user has shadow
+                  ;; this should work regardless of whether the user has
                   ;; shadow imported our lambda wrapper
                   (eql (first thing) 'lambda)
                   (eql (first thing) 'clomp-shadow:lambda)))
@@ -181,7 +196,10 @@
 (deflayer let-init-form)
 (deflayer let-body)
 
-(defmacro clomp-shadow:let (&whole whole-sexp bindings &body body)
+(defun expands-in-environment-p (form env)
+  (second (multiple-value-list (macroexpand-1 form env))))
+
+(defmacro clomp-shadow:let (&whole whole-sexp bindings &body body &environment env)
   `(evaluate
     (make-instance 'clomp-shadow:let
      :sexp ',whole-sexp
@@ -193,8 +211,47 @@
                         binding
                         `(,(first binding)
                            (with-active-layers (let-init-form)
-                             ,(second binding))))))
-         (with-active-layers (let-body) ,@body))))))
+                             ,(maybe-value (second binding)))))))
+         (let ((clomp-let-bindings
+                ,(if (expands-in-environment-p 'clomp-frame-established env)
+                     `(cons (list
+                             ,@(loop for binding in bindings
+                                  collect `(cons ',(first binding) ,(first binding))))
+                            clomp-let-bindings)
+                     `(list (list
+                             ;; we can query the package the macro is expanded in...
+                             ;; can probably query which CL symbols are shadowed to
+                             ;; decide whether to strip out unneeded overhead at expand-time
+                             ;;',*package*
+                             ,@(loop for binding in bindings
+                                  collect `(cons ',(first binding) ,(first binding))))))))
+           (symbol-macrolet ((clomp-frame-established 't))
+             (evaluate
+              (make-instance 'frame
+               ;; This binding structure won't intercept later set/gets, but
+               ;; we can track what environment we are in and verify that later
+               ;; changes to variables are associated with the same symbols and
+               ;; update this representation accordingly
+               :bindings clomp-let-bindings
+               
+               ;;(list ,@(loop for binding in bindings
+               ;;                     collect `(cons ',(first binding)
+               ;;                                    ,(first binding))))
+               :closure
+               (lambda ()
+                 (with-active-layers (let-body)
+                   ,@body)))))))
+       
+       ;;(let (,@(loop for binding in bindings
+       ;;           collect
+       ;;             (if (atom binding)
+       ;;                 binding
+       ;;                 `(,(first binding)
+       ;;                    (with-active-layers (let-init-form)
+       ;;                      ,(second binding))))))
+         
+       ;;  (with-active-layers (let-body) ,@body))
+       ))))
 
 (deflayer let*-init-form)
 (deflayer let*-body)
@@ -498,7 +555,24 @@
             :sexp ',whole-sexp
             :closure
             (lambda ()
-              
+              (let (,@(loop for arg in (list ,@args)
+                           for param in ',args
+                         collect `(,param (with-active-layers (funarg)
+                                            ,(maybe-value arg)))))
+                
+                ;; added additional step for possibility of introspection
+                ;; after arguments are evaluated
+                (evaluate
+                 (make-instance 'invocation
+                                ;; need to change this if we're going to support anonymous functions too
+                                :function-object (function ,',real-symbol)
+                                :function-args (list ,@(loop for param in ',args collect param))
+                                :closure
+                                (lambda ()
+                                  (,',real-symbol
+                                   ,@(loop for param in ',args
+                                          collect param))))))
+              #+nil
               (,',real-symbol
                ,@(loop for arg in (list ,@args)
                     collect
@@ -512,6 +586,7 @@
        (defun ,real-symbol ,args
          ,@body)
 
+       #+nil
        (let ((static-stuff
               (list
                ,@(loop for thing in body

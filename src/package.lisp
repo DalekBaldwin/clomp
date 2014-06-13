@@ -70,13 +70,6 @@
 
 (defpackage :clomp
   (:use :cl :contextl)
-  
-  ;;#.`(:shadow
-  ;;    ,@(loop for symbol being the external-symbols of :common-lisp
-  ;;         when (or (fboundp symbol)
-  ;;                  (special-operator-p symbol))
-  ;;         collect (intern (symbol-name symbol) :keyword)))
-  
   #.`(:export
       :continuation
       :closure
@@ -88,11 +81,15 @@
       :macro
       :function-call
       :user-function-call
+      :value
+      :frame
+      :bindings
       :invocation
+      :function-object
+      :function-args
       :static-layer
       :evaluate
       :funarg
-      :value
       :block-form
       :catch-body
       :eval-when-body
@@ -128,14 +125,7 @@
       :cond-test
       :cond-then
       
-      :function-path-graph
-      
-      ;;,@(remove-if (constantly nil);;(lambda (x) (member x *unshadowed-symbols*))
-      ;;             (loop for symbol being the external-symbols of :common-lisp
-      ;;                when (or (fboundp symbol)
-      ;;                         (special-operator-p symbol))
-      ;;                collect (intern (symbol-name symbol) :keyword)))
-      ))
+      :function-path-graph))
 
 (defpackage :clomp-implementation
   (:use :cl :contextl))

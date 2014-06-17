@@ -82,6 +82,7 @@
       :function-call
       :user-function-call
       :value
+      :environment
       :frame
       :bindings
       :invocation
@@ -89,6 +90,7 @@
       :function-args
       :static-layer
       :evaluate
+      :lookup-environment
       :funarg
       :block-form
       :catch-body

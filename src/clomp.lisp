@@ -145,8 +145,8 @@
      (lambda ()
        (block ,name
          ,@(loop for form in forms
-              collect `(with-active-layers (block-form)
-                         ,form)))))))
+              collect `(with-active-layers (block-form) ;; or just one context for the whole body?
+                         ,(maybe-value form))))))))
 
 (deflayer catch-body)
 
@@ -157,7 +157,7 @@
      :closure
      (lambda ()
        (catch ,tag
-         (with-active-layers (catch-body) ,@body))))))
+         (with-active-layers (catch-body) ,@(mapcar #'maybe-value body)))))))
 
 (deflayer eval-when-body)
 
@@ -169,7 +169,8 @@
        :closure
        (lambda ()
          (with-active-layers (eval-when-body)
-           ,@body))))))
+           ;; maybe-value might not make sense at some eval-times...
+           ,@(mapcar #'maybe-value body)))))))
 
 (deflayer flet-body)
 
@@ -181,7 +182,7 @@
      (lambda ()
        (flet ,definitions
          (with-active-layers (flet-body)
-           ,@body))))))
+           ,@(mapcar #'maybe-value body)))))))
 
 ;; nothing to do...
 #+nil
@@ -215,7 +216,7 @@
      (lambda ()
        (labels ,definitions
          (with-active-layers (labels-body)
-           ,@body))))))
+           ,@(mapcar #'maybe-value body)))))))
 
 (deflayer let-init-form)
 (deflayer let-body)
@@ -280,7 +281,8 @@
                :closure
                (lambda ()
                  ,@(with-active-layers (within-frame)
-                     (macroexpand-dammit (mapcar #'maybe-value body)))))))))
+                     ;;(macroexpand-dammit (mapcar #'maybe-value body)) ;; why did this work?
+                     (mapcar #'macroexpand-dammit (mapcar #'maybe-value body)))))))))
     `(evaluate
       (make-instance 'clomp-shadow:let
                      :sexp ',whole-sexp
@@ -306,7 +308,7 @@
                          `(,(first binding)
                             (with-active-layers (let*-init-form)
                               ,(second binding))))))
-         (with-active-layers (let*-body) ,@body))))))
+         (with-active-layers (let*-body) ,@(mapcar #'maybe-value body)))))))
 
 (deflayer load-time-value-form)
 
@@ -316,6 +318,7 @@
      :sexp ',whole-sexp
      :closure
      (lambda ()
+       ;; should we maybe-value this?
        (load-time-value ,form ,read-only-p)))))
 
 (deflayer locally-body)
@@ -335,7 +338,7 @@
      (lambda ()
        (macrolet ,definitions
          (with-active-layers (macrolet-body)
-           ,@body))))))
+           ,@(mapcar #'maybe-value body)))))))
 
 (deflayer multiple-value-call-function)
 (deflayer multiple-value-call-argument)
@@ -351,7 +354,7 @@
              ,function)
          ,@(loop for argument in arguments
                 collect `(with-active-layers (multiple-value-call-argument)
-                           ,argument)))))))
+                           ,(maybe-value argument))))))))
 
 (deflayer multiple-value-prog1-values-form)
 (deflayer multiple-value-prog1-forms)
@@ -364,9 +367,9 @@
      (lambda ()
        (multiple-value-prog1
            (with-active-layers (multiple-value-prog1-values-form)
-             ,values-form)
+             ,(maybe-value values-form))
          (with-active-layers (multiple-value-prog1-forms)
-           ,@forms))))))
+           ,@(mapcar #'maybe-value forms)))))))
 
 (deflayer progn-forms)
 
@@ -377,12 +380,14 @@
      :closure
      (lambda ()
        (with-active-layers (progn-forms)
-         ,@forms)))))
+         ,@(mapcar #'maybe-value forms))))))
 
 (deflayer progv-symbols)
 (deflayer progv-values)
 (deflayer progv-forms)
 
+
+;; how do we set up the environment in this form? which forms should be maybe-valued?
 (defmacro clomp-shadow:progv (&whole whole-sexp vars vals &body body)
   `(evaluate
     (make-instance 'clomp-shadow:progv
@@ -403,7 +408,7 @@
 
 (deflayer return-from-value)
 
-(defmacro clomp-shadow:return-from (&whole whole-sexp name &optional value)
+(defmacro clomp-shadow:return-from (&whole whole-sexp name &optional (value nil value-p))
   `(evaluate
     (make-instance 'clomp-shadow:return-from
      :sexp ',whole-sexp
@@ -411,7 +416,9 @@
      (lambda ()
        (return-from ,name
          (with-active-layers (return-from-value)
-           ,value))))))
+           ,(if value-p
+                (maybe-value value)
+                value)))))))
 
 (deflayer setq-form)
 
@@ -425,7 +432,7 @@
         ,@(loop for (var form) on things by #'cddr
              collect var
              collect `(with-active-layers (setq-form)
-                        ,form)))))))
+                        ,(maybe-value form))))))))
 
 (deflayer symbol-macrolet-body)
 
@@ -437,6 +444,7 @@
      (lambda ()
        (symbol-macrolet ,macrobindings
          (with-active-layers (symbol-macrolet-body)
+           ;; I don't know how to handle symbol macros with maybe-value...
            ,@body))))))
 
 (deflayer tagbody-form)
@@ -465,7 +473,7 @@
      (lambda ()
        (the ,value-type
             (with-active-layers (the-form)
-              ,form))))))
+              ,(maybe-value form)))))))
 
 (deflayer throw-result)
 
@@ -476,7 +484,7 @@
      :closure
      (lambda ()
        (throw ,tag (with-active-layers (throw-result)
-                     ,result))))))
+                     ,(maybe-value result)))))))
 
 (deflayer unwind-protect-protected)
 (deflayer unwind-protect-cleanup)
@@ -489,9 +497,9 @@
      (lambda ()
        (unwind-protect
             (with-active-layers (unwind-protect-protected)
-              ,protected)
+              ,(maybe-value protected))
          (with-active-layers (unwind-protect-cleanup)
-           ,@cleanup))))))
+           ,@(mapcar #'maybe-value cleanup)))))))
 
 
 
@@ -500,14 +508,13 @@
 (define-simple-wrapper clomp-shadow:setf (&rest args)
   `(setf ,@(loop for (place form) on args by #'cddr
               collect (sanitize-accessor place)
-              collect form)))
+              collect (maybe-value form))))
 
 (define-simple-wrapper clomp-shadow:psetf (&rest args)
   `(psetf ,@(loop for (place form) on args by #'cddr
                collect (sanitize-accessor place)
-               collect form)))
+               collect (maybe-value form))))
 
-#+nil
 (defmacro clomp-shadow:psetq (&whole whole-sexp &rest things)
   `(evaluate
     (make-instance 'clomp-shadow:psetq
@@ -517,10 +524,18 @@
        (psetq
         ,@(loop for (var form) on things by #'cddr
              collect var
-             collect form))))))
+             collect (maybe-value form)))))))
 
 (define-simple-wrapper clomp-shadow:incf (place &optional (delta 1))
   `(incf ,(sanitize-accessor place) ,delta))
+
+;; probably should trace delta lookup only if supplied. this is about
+;; what is lexically apparent in the original code, after all
+#+nil
+(define-simple-wrapper clomp-shadow:incf (place &optional (delta 1 delta-p))
+  `(incf ,(sanitize-accessor place)
+         ,(if delta-p (maybe-value delta)
+              delta)))
 
 (define-simple-wrapper clomp-shadow:decf (place &optional (delta 1))
   `(decf ,(sanitize-accessor place) ,delta))
@@ -568,15 +583,6 @@
                                           ,(maybe-value (first clause)))
                                collect `(with-active-layers (cond-then)
                                           ,(maybe-value (second clause)))))))))
-
-(defmacro defun* (&whole whole-sexp name args &body body)
-  `(defun ,name ,args
-     (evaluate
-      (make-instance 'user-function-call
-       :sexp (list ',name ,@args)
-       :closure
-       (lambda ()
-         ,@body)))))
 
 (deflayer function-body)
 

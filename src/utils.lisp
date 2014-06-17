@@ -30,20 +30,6 @@
          ,,body)
      body)))
 
-(defun maybe-value (arg ;;&optional env
-                           )
-  (let ((let-in-package-p
-         (find 'clomp-shadow:let (package-shadowing-symbols *package*))))
-    (if (atom arg)
-        `(evaluate
-          (make-instance 'value
-           :sexp ',arg
-           :closure
-           (lambda () ,arg)
-           :static-closure
-           (lambda () (list ',arg))))
-        arg)))
-
 (defmacro define-closure-wrapper (symbol)
   (let ((symbol-name (symbol-name symbol)))
     (multiple-value-bind (cl-symbol foundp)

@@ -69,7 +69,7 @@
            collect (intern (symbol-name symbol) :keyword))))
 
 (defpackage :clomp
-  (:use :cl :contextl)
+  (:use :cl :contextl :macroexpand-dammit)
   #.`(:export
       :continuation
       :closure

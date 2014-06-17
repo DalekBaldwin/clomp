@@ -21,12 +21,31 @@
 
 (defclass user-function-call (function-call) ())
 
-(defclass value (lexical-form) ())
+(defclass value (lexical-form)
+  ((environment
+    :accessor environment
+    :initarg :environment)))
 
 (defclass frame (continuation)
   ((bindings
     :accessor bindings
     :initarg :bindings)))
+
+(defclass environment ()
+  ((bindings
+    :accessor bindings
+    :initarg :bindings)
+   (parent
+    :accessor parent
+    :initarg :parent)))
+
+(defparameter *compile-time-initial-environment* (make-instance 'environment
+                                                                :bindings nil
+                                                                :parent nil))
+(defparameter *compile-time-environment* *compile-time-initial-environment*)
+
+
+
 
 (defclass invocation (continuation)
   ((function-object
@@ -48,6 +67,43 @@
   :around ((form continuation))
   (append (list form)
         (funcall (static-closure form))))
+
+(deflayer within-frame)
+
+(define-layered-function box-value (arg)
+  (:method (arg)
+    `(evaluate
+      (make-instance 'value
+       :sexp ',arg
+       :environment nil
+       :closure
+       (lambda () ,arg)
+       :static-closure
+       (lambda () (list ',arg)))))
+  (:method :in-layer within-frame (arg)
+    `(evaluate
+      (make-instance 'value
+       :sexp ',arg
+       :environment environment
+       :closure
+       (lambda () ,arg)
+       :static-closure
+       (lambda () (list ',arg))))))
+
+(defun maybe-value (arg) ;; pass macro-time env too??
+  (let (;;(let-in-package-p (find 'clomp-shadow:let (package-shadowing-symbols *package*)))
+        )
+    (if (atom arg)
+        (box-value arg)
+        arg)))
+
+(defun lookup (var env)
+  (unless (null env)
+    (let ((found (find var (bindings env) :key #'car)))
+      (or (and found env) (lookup var (parent env))))))
+
+
+
 
 (deflayer funarg)
 
@@ -160,98 +216,120 @@
          (with-active-layers (labels-body)
            ,@body))))))
 
-#+nil
-(defclass let-init-form (form) ())
-
-#+nil
-(defmacro :let-init-form (form)
-  `(evaluate
-    (make-instance 'let-init-form
-     :sexp ',form
-     :closure (lambda () ,form))))
-
-#+nil
-(defclass let-body (form) ())
-
-#+nil
-(defmacro :let-body (&body body)
-  `(evaluate
-    (make-instance 'let-body
-     :sexp '(_implicit-progn_ ,@body)
-     :closure (lambda ()
-                ,@body))))
-
-#+nil
-(defmacro let (&whole whole-sexp bindings &body body)
-  `(evaluate
-    (make-instance 'let
-     :sexp ',whole-sexp
-     :closure (lambda ()
-                (let (,@(loop for binding in bindings
-                           collect `(,(first binding)
-                                      (:let-init-form
-                                        ,(second binding)))))
-                  (:let-body ,@body))))))
-
 (deflayer let-init-form)
 (deflayer let-body)
 
-(defun expands-in-environment-p (form env)
-  (second (multiple-value-list (macroexpand-1 form env))))
+(define-layered-function call-with-extended-bindings (binding-var var-names env &rest body)
+  (:method (binding-var var-names env &rest body)
+    (let ((*compile-time-environment*
+           (make-instance 'environment
+            :bindings var-names
+            :parent *compile-time-environment*)))
+      `(let ((,binding-var
+              (list (list
+                     ,@(loop for var-name in var-names
+                          collect `(cons ',var-name ,var-name)))
+                    ;;',(active-layers)
+                    ))
+             (environment
+              (make-instance 'environment
+                             :bindings (list ,@(loop for var-name in var-names
+                                                  collect `(cons ',var-name ,var-name)))
+                             :parent nil)))
+         ;;,(macroexpand-dammit:macroexpand-dammit `(progn ,@body) )
+         
+         ;;,(progn
+         ;;  (ensure-active-layer 'within-frame)
+         ;;  (unwind-protect
+         ;;       (macroexpand-dammit:macroexpand-dammit `(progn ,@body) env)
+         ;;    nil
+         ;;    (ensure-inactive-layer 'within-frame)
+         ;;    ))
+
+         ;;,(call-with-compiletime-active-layers (list 'within-frame) env
+         ;;                                       body)
+         
+         ;; !!!
+         ,(with-active-layers (within-frame)
+                              (macroexpand-dammit `(progn ,@(mapcar #'maybe-value body)) env))
+         
+         ;;,(with-compiletime-active-layers (within-frame)
+         ;;                                 body)
+         
+         ;;,(with-active-layers (within-frame)
+         ;;                     ;;`(progn ,@body)
+         ;;                     (macroexpand-dammit `(progn ,@body) env)
+         ;;                     )
+
+         ;;,@(with-active-layers (within-frame)
+         ;;                      (let ((stuff (loop for thing in body
+         ;;                                      collect (macroexpand thing;; env
+         ;;                                                           ))))
+         ;;                        stuff))
+
+
+         ;;,@(with-active-layers (within-frame)
+         ;;                      body)
+         )))
+  (:method :in-layer within-frame (binding-var var-names env &rest body)
+    (let ((*compile-time-environment*
+           (make-instance 'environment
+                          :bindings var-names
+                          :parent *compile-time-environment*)))
+      `(let ((,binding-var
+              (cons (list ,@(loop for var-name in var-names
+                               collect `(cons ',var-name ,var-name)))
+                    ,binding-var))
+             (environment
+              (make-instance 'environment
+               :bindings (list ,@(loop for var-name in var-names
+                                    collect `(cons ',var-name ,var-name)))
+               :parent environment)))
+         ,@(mapcar #'maybe-value body)))))
+
+
+(defmacro with-extended-bindings ((binding-var var-names env) &body body)
+  `(call-with-extended-bindings ',binding-var ,var-names ,env
+                                ,@body))
 
 (defmacro clomp-shadow:let (&whole whole-sexp bindings &body body &environment env)
-  `(evaluate
-    (make-instance 'clomp-shadow:let
-     :sexp ',whole-sexp
-     :closure
-     (lambda ()
-       (let (,@(loop for binding in bindings
-                  collect
-                    (if (atom binding)
-                        binding
-                        `(,(first binding)
-                           (with-active-layers (let-init-form)
-                             ,(maybe-value (second binding)))))))
-         (let ((clomp-let-bindings
-                ,(if (expands-in-environment-p 'clomp-frame-established env)
-                     `(cons (list
-                             ,@(loop for binding in bindings
-                                  collect `(cons ',(first binding) ,(first binding))))
-                            clomp-let-bindings)
-                     `(list (list
-                             ;; we can query the package the macro is expanded in...
-                             ;; can probably query which CL symbols are shadowed to
-                             ;; decide whether to strip out unneeded overhead at expand-time
-                             ;;',*package*
-                             ,@(loop for binding in bindings
-                                  collect `(cons ',(first binding) ,(first binding))))))))
-           (symbol-macrolet ((clomp-frame-established 't))
-             (evaluate
+  (let* ((processed-bindings (loop for binding in bindings
+                                collect
+                                  (if (atom binding)
+                                      binding
+                                      `(,(first binding)
+                                         (with-active-layers (let-init-form)
+                                           ,(maybe-value (second binding)))))))
+         (extended-body
+          (with-extended-bindings ( clomp-let-bindings (mapcar #'first bindings) env)
+            `(evaluate
               (make-instance 'frame
-               ;; This binding structure won't intercept later set/gets, but
-               ;; we can track what environment we are in and verify that later
-               ;; changes to variables are associated with the same symbols and
-               ;; update this representation accordingly
                :bindings clomp-let-bindings
-               
-               ;;(list ,@(loop for binding in bindings
-               ;;                     collect `(cons ',(first binding)
-               ;;                                    ,(first binding))))
                :closure
                (lambda ()
                  (with-active-layers (let-body)
+                   ;; !!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                   ;; need to put some sort of deferred processing step here so that we use
+                   ;; the context layer established before macroexpand-dammit is invoked...
                    ,@body)))))))
-       
-       ;;(let (,@(loop for binding in bindings
-       ;;           collect
-       ;;             (if (atom binding)
-       ;;                 binding
-       ;;                 `(,(first binding)
-       ;;                    (with-active-layers (let-init-form)
-       ;;                      ,(second binding))))))
-         
-       ;;  (with-active-layers (let-body) ,@body))
-       ))))
+    `(evaluate
+      (make-instance 'clomp-shadow:let
+                     :sexp ',whole-sexp
+                     :closure
+                     (lambda ()
+                       (let (,@processed-bindings)
+                         ,extended-body)
+                       
+                       ;;(let (,@(loop for binding in bindings
+                       ;;           collect
+                       ;;             (if (atom binding)
+                       ;;                 binding
+                       ;;                 `(,(first binding)
+                       ;;                    (with-active-layers (let-init-form)
+                       ;;                      ,(second binding))))))
+                       
+                       ;;  (with-active-layers (let-body) ,@body))
+                       )))))
 
 (deflayer let*-init-form)
 (deflayer let*-body)
@@ -541,7 +619,9 @@
        (lambda ()
          ,@body)))))
 
-(defmacro clomp-shadow:defun (&whole whole-sexp name args &body body)
+(deflayer function-body)
+
+(defmacro clomp-shadow:defun (&whole whole-sexp name args &body body &environment env)
   (let* (;;(internal-name (intern (format nil "+~A-INTERNAL+" (symbol-name name))))
          (internal-package-name (format nil "CLOMP.PACKAGE.~A" (package-name (symbol-package name))))
          (real-symbol (intern (format nil "~A" name)
@@ -550,6 +630,7 @@
                                (make-package internal-package-name)))))
     `(progn
        (defmacro ,name (&whole whole-sexp ,@args)
+         
          `(evaluate
            (make-instance 'user-function-call
             :sexp ',whole-sexp
@@ -583,9 +664,18 @@
               (list
                ,@(loop for arg in (list ,@args)
                       collect (maybe-value arg)))))))
-       (defun ,real-symbol ,args
-         ,@body)
-
+       ,(let ((extended-body
+               (with-extended-bindings (clomp-let-bindings args env)
+                 `(evaluate
+                   (make-instance 'frame
+                                  :bindings clomp-let-bindings
+                                  :closure
+                                  (lambda ()
+                                    (with-active-layers (function-body)
+                                      ,@body)))))))
+             `(defun ,real-symbol ,args
+                ,extended-body))
+       
        #+nil
        (let ((static-stuff
               (list

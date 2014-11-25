@@ -31,6 +31,10 @@
     :accessor bindings
     :initarg :bindings)))
 
+;; sb-kernel:lexenv also has :funs, :blocks: :tags, :type-restrictions, :lambda (reified source object),
+;; :cleanup, :handled-conditions, :disabled-package-locks, :%policy, and :user-data
+;; note that :funs includes macros -- functions are repr'd like (,name . #<function ...>), macros
+;; like (,name macro . #<function ...>)
 (defclass environment ()
   ((bindings
     :accessor bindings
@@ -39,10 +43,7 @@
     :accessor parent
     :initarg :parent)))
 
-(defparameter *compile-time-initial-environment* (make-instance 'environment
-                                                                :bindings nil
-                                                                :parent nil))
-(defparameter *compile-time-environment* *compile-time-initial-environment*)
+(defparameter *compile-time-environment* nil)
 
 
 
@@ -68,7 +69,10 @@
   (append (list form)
         (funcall (static-closure form))))
 
+;; expansion-time layer
 (deflayer within-frame)
+
+
 
 (define-layered-function box-value (arg)
   (:method (arg)
@@ -84,7 +88,7 @@
     `(evaluate
       (make-instance 'value
        :sexp ',arg
-       :environment environment
+       :environment current-environment
        :closure
        (lambda () ,arg)
        :static-closure
@@ -100,7 +104,7 @@
 (defun lookup-environment-aux (var env)
   (unless (null env)
     (let ((found (member var (bindings env) :key #'car)))
-      (or (and found env) (lookup var (parent env))))))
+      (or (and found env) (lookup-environment-aux var (parent env))))))
 
 (defgeneric lookup-environment (form)
   (:method ((form value))
@@ -235,7 +239,7 @@
                      )
                     ;;',(active-layers)
                     ))
-             (environment
+             (current-environment
               (make-instance 'environment
                              :bindings (list ,@(loop for var-name in var-names
                                                   collect `(cons ',var-name ,var-name)))
@@ -252,11 +256,11 @@
                           ;;',*compile-time-environment*
                           )
                     ,binding-var))
-             (environment
+             (current-environment
               (make-instance 'environment
                :bindings (list ,@(loop for var-name in var-names
                                     collect `(cons ',var-name ,var-name)))
-               :parent environment)))
+               :parent current-environment)))
          ,@body))))
 
 
@@ -559,7 +563,35 @@
   `(pop ,(sanitize-accessor place)))
 
 
-;;;;
+;;;; OTHER MACROS
+
+#+nil
+(length
+ '(ASSERT CALL-METHOD CASE CCASE CHECK-TYPE CTYPECASE DECLAIM
+      DEFCLASS DEFCONSTANT DEFGENERIC DEFINE-COMPILER-MACRO DEFINE-CONDITION
+      DEFINE-METHOD-COMBINATION DEFINE-MODIFY-MACRO DEFINE-SETF-EXPANDER
+      DEFINE-SYMBOL-MACRO DEFMACRO DEFMETHOD DEFPACKAGE DEFPARAMETER DEFSETF
+      DEFSTRUCT DEFTYPE DEFVAR DESTRUCTURING-BIND DO DO* DO-ALL-SYMBOLS
+      DO-EXTERNAL-SYMBOLS DO-SYMBOLS DOLIST DOTIMES ECASE ETYPECASE FORMATTER
+      HANDLER-BIND HANDLER-CASE IGNORE-ERRORS IN-PACKAGE LAMBDA LOOP
+      LOOP-FINISH MULTIPLE-VALUE-BIND MULTIPLE-VALUE-LIST MULTIPLE-VALUE-SETQ
+      NTH-VALUE PPRINT-EXIT-IF-LIST-EXHAUSTED PPRINT-LOGICAL-BLOCK
+      PPRINT-POP PRINT-UNREADABLE-OBJECT PROG PROG* PROG1 PROG2
+      RESTART-BIND RESTART-CASE RETURN STEP
+      TIME TRACE TYPECASE UNLESS UNTRACE WHEN WITH-ACCESSORS
+      WITH-COMPILATION-UNIT WITH-CONDITION-RESTARTS WITH-HASH-TABLE-ITERATOR
+      WITH-INPUT-FROM-STRING WITH-OPEN-FILE WITH-OPEN-STREAM
+      WITH-OUTPUT-TO-STRING WITH-PACKAGE-ITERATOR WITH-SIMPLE-RESTART WITH-SLOTS
+      WITH-STANDARD-IO-SYNTAX))
+
+(deflayer defparameter-val)
+
+(defmacro clomp-shadow:defparameter (&whole whole-sexp var val &optional doc)
+  `(evaluate
+    (make-instance 'clomp-shadow:defparameter
+     :sexp ',whole-sexp
+     :closure (lambda ()
+                (defparameter ,var (with-active-layers (defparameter-val) ,val) ,doc)))))
 
 (deflayer cond-test)
 (deflayer cond-then)
@@ -584,15 +616,83 @@
                                collect `(with-active-layers (cond-then)
                                           ,(maybe-value (second clause)))))))))
 
+(deflayer and-form)
+
+(defmacro clomp-shadow:and (&whole whole-sexp &rest forms)
+  `(evaluate
+    (make-instance 'clomp-shadow:and
+     :sexp ',whole-sexp
+     :closure (lambda ()
+                (and
+                 ,@(loop for form in forms
+                        collect
+                        `(with-active-layers (and-form)
+                           ,(maybe-value form))))))))
+
+(deflayer or-form)
+
+(defmacro clomp-shadow:or (&whole whole-sexp &rest forms)
+  `(evaluate
+    (make-instance 'clomp-shadow:or
+     :sexp ',whole-sexp
+     :closure (lambda ()
+                (or
+                 ,@(loop for form in forms
+                        collect
+                        `(with-active-layers (or-form)
+                           ,(maybe-value form))))))))
+
 (deflayer function-body)
 
+(defun internal-symbol (symbol)
+  (let ((internal-package-name
+         (format nil "CLOMP.PACKAGE.~A" (package-name (symbol-package symbol)))))
+    (intern (princ-to-string symbol)
+            (or 
+             (find-package internal-package-name)
+             (make-package internal-package-name)))))
+
 (defmacro clomp-shadow:defun (&whole whole-sexp name args &body body &environment env)
-  (let* (;;(internal-name (intern (format nil "+~A-INTERNAL+" (symbol-name name))))
-         (internal-package-name (format nil "CLOMP.PACKAGE.~A" (package-name (symbol-package name))))
-         (real-symbol (intern (format nil "~A" name)
-                              (or 
-                               (find-package internal-package-name)
-                               (make-package internal-package-name)))))
+  (let* ((internal-symbol (internal-symbol name))
+        (internal-macro
+         `(macrolet ((,name (&whole whole-sexp ,@args)
+                       ;; ensure same macro available for recursive calls
+            `(evaluate
+              (make-instance 'user-function-call
+               :sexp ',whole-sexp
+               :closure
+               (lambda ()
+                 (let (,@(loop for arg in (list ,@args)
+                            for param in ',args
+                            collect `(,param (with-active-layers (funarg)
+                                               ,(maybe-value arg)))))
+                   
+                   ;; added additional step for possibility of introspection
+                   ;; after arguments are evaluated
+                   (evaluate
+                    (make-instance 'invocation
+                      ;; need to change this if we're going to support anonymous functions too
+                        :function-object (function ,',internal-symbol)
+                        :function-args (list ,@(loop for param in ',args collect param))
+                        :closure
+                        (lambda ()
+                          (,',internal-symbol
+                           ,@(loop for param in ',args
+                                collect param))))))
+                    #+nil
+                    (,',internal-symbol
+                     ,@(loop for arg in (list ,@args)
+                          collect
+                            `(with-active-layers (funarg)
+                               ,(maybe-value arg)))))
+                  :static-closure
+                  (lambda ()
+                    (list
+                     ,@(loop for arg in (list ,@args)
+                          collect (maybe-value arg))))))))
+                                                              ,(mapcar #'maybe-value body))
+         )
+        )
     `(progn
        (defmacro ,name (&whole whole-sexp ,@args)
          `(evaluate
@@ -610,15 +710,15 @@
                 (evaluate
                  (make-instance 'invocation
                                 ;; need to change this if we're going to support anonymous functions too
-                                :function-object (function ,',real-symbol)
+                                :function-object (function ,',internal-symbol)
                                 :function-args (list ,@(loop for param in ',args collect param))
                                 :closure
                                 (lambda ()
-                                  (,',real-symbol
+                                  (,',internal-symbol
                                    ,@(loop for param in ',args
                                           collect param))))))
               #+nil
-              (,',real-symbol
+              (,',internal-symbol
                ,@(loop for arg in (list ,@args)
                     collect
                       `(with-active-layers (funarg)
@@ -636,8 +736,46 @@
                                   :closure
                                   (lambda ()
                                     ,@(with-active-layers (within-frame)
-                                        (macroexpand-dammit (mapcar #'maybe-value body)))))))))
-             `(defun ,real-symbol ,args
+                                                          (macroexpand-dammit
+                                                           `(macrolet ((,name (&whole whole-sexp ,@args)
+                                                             ;; ensure same macro available for recursive calls
+               `(evaluate
+                 (make-instance 'user-function-call
+                  :sexp ',whole-sexp
+                  :closure
+                  (lambda ()
+                    (let (,@(loop for arg in (list ,@args)
+                               for param in ',args
+                               collect `(,param (with-active-layers (funarg)
+                                                  ,(maybe-value arg)))))
+                      
+                      ;; added additional step for possibility of introspection
+                      ;; after arguments are evaluated
+                      (evaluate
+                       (make-instance 'invocation
+                        ;; need to change this if we're going to support anonymous functions too
+                        :function-object (function ,',internal-symbol)
+                        :function-args (list ,@(loop for param in ',args collect param))
+                        :closure
+                        (lambda ()
+                          (,',internal-symbol
+                           ,@(loop for param in ',args
+                                collect param))))))
+                    #+nil
+                    (,',internal-symbol
+                     ,@(loop for arg in (list ,@args)
+                          collect
+                            `(with-active-layers (funarg)
+                               ,(maybe-value arg)))))
+                  :static-closure
+                  (lambda ()
+                    (list
+                     ,@(loop for arg in (list ,@args)
+                          collect (maybe-value arg))))))))
+                                                              ,(mapcar #'maybe-value body))))))))))
+             
+             ;; define actual function in special package
+             `(defun ,internal-symbol ,args
                 (with-active-layers (function-body)
                   ,extended-body)))
        
@@ -655,6 +793,8 @@
        ;; should it be the original or the internal symbol?
        ',name
        )))
+
+;;;; 
 
 (defgeneric record-call (parent child)
   (:method (parent child))

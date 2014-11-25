@@ -124,8 +124,11 @@
       :unwind-protect-protected
       :unwind-protect-cleanup
       
+      :defparameter-val
       :cond-test
       :cond-then
+      :and-form
+      :or-form
       
       :function-path-graph))
 

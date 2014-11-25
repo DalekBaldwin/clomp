@@ -654,80 +654,43 @@
 
 (defmacro clomp-shadow:defun (&whole whole-sexp name args &body body &environment env)
   (let* ((internal-symbol (internal-symbol name))
-        (internal-macro
-         `(macrolet ((,name (&whole whole-sexp ,@args)
-                       ;; ensure same macro available for recursive calls
-            `(evaluate
-              (make-instance 'user-function-call
-               :sexp ',whole-sexp
-               :closure
-               (lambda ()
-                 (let (,@(loop for arg in (list ,@args)
-                            for param in ',args
-                            collect `(,param (with-active-layers (funarg)
-                                               ,(maybe-value arg)))))
-                   
-                   ;; added additional step for possibility of introspection
-                   ;; after arguments are evaluated
-                   (evaluate
-                    (make-instance 'invocation
-                      ;; need to change this if we're going to support anonymous functions too
-                        :function-object (function ,',internal-symbol)
-                        :function-args (list ,@(loop for param in ',args collect param))
-                        :closure
-                        (lambda ()
-                          (,',internal-symbol
-                           ,@(loop for param in ',args
-                                collect param))))))
-                    #+nil
-                    (,',internal-symbol
-                     ,@(loop for arg in (list ,@args)
-                          collect
-                            `(with-active-layers (funarg)
-                               ,(maybe-value arg)))))
-                  :static-closure
-                  (lambda ()
-                    (list
-                     ,@(loop for arg in (list ,@args)
-                          collect (maybe-value arg))))))))
-                                                              ,(mapcar #'maybe-value body))
-         )
-        )
+        (macro-body
+         ``(evaluate
+            (make-instance 'user-function-call
+             :sexp ',whole-sexp
+             :closure
+             (lambda ()
+               (let (,@(loop for arg in (list ,@args)
+                          for param in ',args
+                          collect `(,param (with-active-layers (funarg)
+                                             ,(maybe-value arg)))))
+                 
+                 ;; added additional step for possibility of introspection
+                 ;; after arguments are evaluated
+                 (evaluate
+                  (make-instance 'invocation
+                   ;; need to change this if we're going to support anonymous functions too
+                   :function-object (function ,',internal-symbol)
+                   :function-args (list ,@(loop for param in ',args collect param))
+                   :closure
+                   (lambda ()
+                     (,',internal-symbol
+                      ,@(loop for param in ',args
+                           collect param))))))
+               #+nil
+               (,',internal-symbol
+                ,@(loop for arg in (list ,@args)
+                     collect
+                       `(with-active-layers (funarg)
+                          ,(maybe-value arg)))))
+             :static-closure
+             (lambda ()
+               (list
+                ,@(loop for arg in (list ,@args)
+                     collect (maybe-value arg))))))))
     `(progn
        (defmacro ,name (&whole whole-sexp ,@args)
-         `(evaluate
-           (make-instance 'user-function-call
-            :sexp ',whole-sexp
-            :closure
-            (lambda ()
-              (let (,@(loop for arg in (list ,@args)
-                           for param in ',args
-                         collect `(,param (with-active-layers (funarg)
-                                            ,(maybe-value arg)))))
-                
-                ;; added additional step for possibility of introspection
-                ;; after arguments are evaluated
-                (evaluate
-                 (make-instance 'invocation
-                                ;; need to change this if we're going to support anonymous functions too
-                                :function-object (function ,',internal-symbol)
-                                :function-args (list ,@(loop for param in ',args collect param))
-                                :closure
-                                (lambda ()
-                                  (,',internal-symbol
-                                   ,@(loop for param in ',args
-                                          collect param))))))
-              #+nil
-              (,',internal-symbol
-               ,@(loop for arg in (list ,@args)
-                    collect
-                      `(with-active-layers (funarg)
-                         ,(maybe-value arg)))))
-            :static-closure
-            (lambda ()
-              (list
-               ,@(loop for arg in (list ,@args)
-                      collect (maybe-value arg)))))))
+         ,macro-body)
        ,(let ((extended-body
                (with-extended-bindings (clomp-let-bindings args env)
                  `(evaluate
@@ -738,40 +701,7 @@
                                     ,@(with-active-layers (within-frame)
                                                           (macroexpand-dammit
                                                            `(macrolet ((,name (&whole whole-sexp ,@args)
-                                                             ;; ensure same macro available for recursive calls
-               `(evaluate
-                 (make-instance 'user-function-call
-                  :sexp ',whole-sexp
-                  :closure
-                  (lambda ()
-                    (let (,@(loop for arg in (list ,@args)
-                               for param in ',args
-                               collect `(,param (with-active-layers (funarg)
-                                                  ,(maybe-value arg)))))
-                      
-                      ;; added additional step for possibility of introspection
-                      ;; after arguments are evaluated
-                      (evaluate
-                       (make-instance 'invocation
-                        ;; need to change this if we're going to support anonymous functions too
-                        :function-object (function ,',internal-symbol)
-                        :function-args (list ,@(loop for param in ',args collect param))
-                        :closure
-                        (lambda ()
-                          (,',internal-symbol
-                           ,@(loop for param in ',args
-                                collect param))))))
-                    #+nil
-                    (,',internal-symbol
-                     ,@(loop for arg in (list ,@args)
-                          collect
-                            `(with-active-layers (funarg)
-                               ,(maybe-value arg)))))
-                  :static-closure
-                  (lambda ()
-                    (list
-                     ,@(loop for arg in (list ,@args)
-                          collect (maybe-value arg))))))))
+                                                                         ,macro-body))
                                                               ,(mapcar #'maybe-value body))))))))))
              
              ;; define actual function in special package

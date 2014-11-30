@@ -654,41 +654,44 @@
 
 (defmacro clomp-shadow:defun (&whole whole-sexp name args &body body &environment env)
   (let* ((internal-symbol (internal-symbol name))
-        (macro-body
-         ``(evaluate
-            (make-instance 'user-function-call
-             :sexp ',whole-sexp
-             :closure
-             (lambda ()
-               (let (,@(loop for arg in (list ,@args)
-                          for param in ',args
-                          collect `(,param (with-active-layers (funarg)
-                                             ,(maybe-value arg)))))
+         (macro-body
+          ``(evaluate
+             (make-instance 'user-function-call
+              :sexp ',whole-sexp
+              :closure
+              (lambda ()
+                (let (,@(loop for arg in (list ,@args)
+                           for param in ',args
+                           collect `(,param (with-active-layers (funarg)
+                                              ,(maybe-value arg)))))
                  
-                 ;; added additional step for possibility of introspection
-                 ;; after arguments are evaluated
-                 (evaluate
-                  (make-instance 'invocation
-                   ;; need to change this if we're going to support anonymous functions too
-                   :function-object (function ,',internal-symbol)
-                   :function-args (list ,@(loop for param in ',args collect param))
-                   :closure
-                   (lambda ()
-                     (,',internal-symbol
-                      ,@(loop for param in ',args
-                           collect param))))))
-               #+nil
-               (,',internal-symbol
-                ,@(loop for arg in (list ,@args)
-                     collect
-                       `(with-active-layers (funarg)
-                          ,(maybe-value arg)))))
-             :static-closure
-             (lambda ()
-               (list
-                ,@(loop for arg in (list ,@args)
-                     collect (maybe-value arg))))))))
+                  ;; added additional step for possibility of introspection
+                  ;; after arguments are evaluated
+                  (evaluate
+                   (make-instance 'invocation
+                    ;; need to change this if we're going to support anonymous functions too
+                    :function-object (function ,',internal-symbol)
+                    :function-args (list ,@(loop for param in ',args collect param))
+                    :closure
+                    (lambda ()
+                      (,',internal-symbol
+                       ,@(loop for param in ',args
+                            collect param))))))
+                #+nil
+                (,',internal-symbol
+                 ,@(loop for arg in (list ,@args)
+                      collect
+                        `(with-active-layers (funarg)
+                           ,(maybe-value arg)))))
+              :static-closure
+              (lambda ()
+                (list
+                 ,@(loop for arg in (list ,@args)
+                      collect (maybe-value arg))))))))
     `(progn
+       ;; ensure we don't get complaints about package not existing when systems
+       ;; are compiled/loaded in some weird order - does this make sense?
+       (internal-symbol (internal-symbol ',name))
        (defmacro ,name (&whole whole-sexp ,@args)
          ,macro-body)
        ,(let ((extended-body
@@ -699,10 +702,13 @@
                                   :closure
                                   (lambda ()
                                     ,@(with-active-layers (within-frame)
-                                                          (macroexpand-dammit
-                                                           `(macrolet ((,name (&whole whole-sexp ,@args)
-                                                                         ,macro-body))
-                                                              ,(mapcar #'maybe-value body))))))))))
+                                        ;; expansions further down tree rely on expansion-time dynamic context,
+                                        ;; so we must force expansion with macroexpand-dammit to use that context
+                                        ;; before it is thrown out on the next pass
+                                        (macroexpand-dammit
+                                         `(macrolet ((,name (&whole whole-sexp ,@args)
+                                                       ,macro-body))
+                                            ,(mapcar #'maybe-value body))))))))))
              
              ;; define actual function in special package
              `(defun ,internal-symbol ,args

@@ -655,6 +655,8 @@
 (defmacro clomp-shadow:defun (&whole whole-sexp name args &body body &environment env)
   (let* ((internal-symbol (internal-symbol name))
          (macro-body
+          ;; need same code transformation available this within the current form for
+          ;; recursive calls, and elsewhere for nonrecursive calls
           ``(evaluate
              (make-instance 'user-function-call
               :sexp ',whole-sexp
@@ -691,7 +693,7 @@
     `(progn
        ;; ensure we don't get complaints about package not existing when systems
        ;; are compiled/loaded in some weird order - does this make sense?
-       (internal-symbol (internal-symbol ',name))
+       (internal-symbol ',name)
        (defmacro ,name (&whole whole-sexp ,@args)
          ,macro-body)
        ,(let ((extended-body

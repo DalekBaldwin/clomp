@@ -268,8 +268,15 @@
   `(call-with-extended-bindings ',binding-var ,var-names ,env
                                 ,@body))
 
+
+
 (defmacro clomp-shadow:let (&whole whole-sexp bindings &body body &environment env)
   (let* (;; todo: handle declares and put them in the proper place in final expansion
+         (listified-bindings (loop for binding in bindings
+                                collect
+                                  (if (atom binding)
+                                      (list binding)
+                                      binding)))
          (processed-bindings (loop for binding in bindings
                                 collect
                                   (if (atom binding)
@@ -278,7 +285,8 @@
                                          (with-active-layers (let-init-form)
                                            ,(maybe-value (second binding)))))))
          (extended-body
-          (with-extended-bindings ( clomp-let-bindings (mapcar #'first bindings) env)
+          (with-extended-bindings (clomp-let-bindings
+                                   (mapcar #'first listified-bindings) env)
             `(evaluate
               (make-instance 'frame
                :bindings clomp-let-bindings
@@ -289,12 +297,12 @@
                      (mapcar #'macroexpand-dammit (mapcar #'maybe-value body)))))))))
     `(evaluate
       (make-instance 'clomp-shadow:let
-                     :sexp ',whole-sexp
-                     :closure
-                     (lambda ()
-                       (let (,@processed-bindings)
-                         (with-active-layers (let-body)
-                           ,extended-body)))))))
+       :sexp ',whole-sexp
+       :closure
+       (lambda ()
+         (let (,@processed-bindings)
+           (with-active-layers (let-body)
+             ,extended-body)))))))
 
 (deflayer let*-init-form)
 (deflayer let*-body)

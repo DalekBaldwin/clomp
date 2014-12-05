@@ -2,9 +2,11 @@
 
 (defpackage :clomp-test
   (:use :cl :stefil)
-  #.`(:shadowing-import-from :clomp
-                             ,@(loop for symbol being the external-symbols of :clomp
-                                  collect symbol))
+  #.`(:shadowing-import-from :clomp-shadow
+                             ,@(loop for symbol being the external-symbols of :clomp-shadow
+                                  when (or (fboundp symbol)
+                                           (special-operator-p symbol))
+                                  collect (intern (symbol-name symbol) :keyword)))
   (:export
    #:test-all
    #:run-all-tests))

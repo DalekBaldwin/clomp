@@ -80,7 +80,7 @@ I took the phrase "closure-oriented metaprogramming" from [Vladimir Sedach] [1]'
 
 > The first is the fact that we had to shadow `=` in our package. Common Lisp forbids the redefinition of the functions, macros and special forms defined in the standard, so we have to go out of our way if we want to achieve that effect.
 
-As Clomp demonstrates, this is not too difficult, and far from being a kludge, it's actually a quite natural design pattern in the creation of generic interpretation and analysis tools when we want enough flexibility to let the user decide whether to delegate a particular fragment of a computation to the underlying Common Lisp implementation. We can recreate the behavior of the pre-ANSI `eval-hook`, or create families of reflective tools that intercept function calls, variable lookups, and other events.
+As Clomp demonstrates, this is not too difficult, and far from being a kludge, it's actually a quite natural design pattern in the creation of generic interpretation and analysis tools when we want enough flexibility to let the user decide whether to delegate a particular fragment of a computation to the underlying Common Lisp implementation. We can recreate the behavior of the pre-ANSI `eval-hook`, or create families of reflective tools that intercept function calls, variable lookups, and other events. This provides a flexible framework for creating custom [program visualization tools] [3], for instance.
 
 > The second is the fact that Common Lisp has so many special forms and macros - `and` just happens to be one of them. Smalltalk avoids this problem by doing virtually everything via message passing and closures. In Common Lisp we don't have this straightjacket, but we also don't have this luxury of assuming that everything is an object or a closure.
 
@@ -92,3 +92,4 @@ As Clomp demonstrates, this is not too difficult, and far from being a kludge, i
 
 [1]:https://github.com/vsedach
 [2]:http://carcaddar.blogspot.com/2009/04/closure-oriented-metaprogramming-via.html
+[3]:https://vimeo.com/109918920

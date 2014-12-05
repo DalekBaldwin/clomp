@@ -6,15 +6,13 @@ This project is intended to be a jumping-off point for exploring a number of dif
 ```lisp
 (in-package :cl)
 
-(defpackage :clomp-user
-  (:use :cl)
-  (:shadowing-import-from :clomp
-                          :let
-                          :if
-                          :+))
+(defpackage :clomp-user-imp
+  (:use :cl :contextl))
+
+(in-package :clomp-user-imp)
 
 (let ((depth 0))
-  (defmethod clomp:evaluate :around ((form clomp:form))
+  (define-layered-method clomp:evaluate :around ((form clomp:form))
              (let ((dashes
                     (with-output-to-string (s)
                       (dotimes (i depth)
@@ -26,8 +24,15 @@ This project is intended to be a jumping-off point for exploring a number of dif
                  (format t "~&<-~A ~A: ~{~A~^, ~}~%" dashes (clomp:sexp form) result)
                  (values-list result)))))
 
-(defmethod clomp:evaluate :before ((form clomp:if))
+(define-layered-method clomp:evaluate :before ((form clomp-shadow:if))
   (format t "~&(This is an if-form!)~%"))
+
+(defpackage :clomp-user
+  (:use :cl)
+  (:shadowing-import-from :clomp-shadow
+                          :let
+                          :if
+                          :+))
 
 (in-package :clomp-user)
 
@@ -46,23 +51,25 @@ This prints:
 
 ```
 -> (LET ((X 2) (Y 3))
-        (VALUES (IF (< X Y) (+ X (* X Y)) (- X Y))
-                (IF (> X Y) (+ X Y) (* X Y))))
+     (VALUES (IF (< X Y) (+ X (* X Y)) (- X Y))
+             (IF (> X Y) (+ X Y) (* X Y))))
+---> 2
+<--- 2: 2
+---> 3
+<--- 3: 3
 ---> (IF (< X Y) (+ X (* X Y)) (- X Y))
 (This is an if-form!)
 -----> (+ X (* X Y))
 -------> X
 <------- X: 2
--------> (* X Y)
-<------- (* X Y): 6
 <----- (+ X (* X Y)): 8
 <--- (IF (< X Y) (+ X (* X Y)) (- X Y)): 8
 ---> (IF (> X Y) (+ X Y) (* X Y))
 (This is an if-form!)
 <--- (IF (> X Y) (+ X Y) (* X Y)): 6
 <- (LET ((X 2) (Y 3))
-        (VALUES (IF (< X Y) (+ X (* X Y)) (- X Y))
-                (IF (> X Y) (+ X Y) (* X Y)))): 8, 6
+     (VALUES (IF (< X Y) (+ X (* X Y)) (- X Y))
+             (IF (> X Y) (+ X Y) (* X Y)))): 8, 6
 ```
 
 By shadow importing `let`, `if`, and `+`, we trace lexical expressions beginning with those symbols, as well as expressions appearing as arguments to `+`-forms. So the first `(* x y)`, as an argument to `+`, appears as node in the trace, but the second `(* x y)` does not.
@@ -73,7 +80,7 @@ I took the phrase "closure-oriented metaprogramming" from [Vladimir Sedach] [1]'
 
 > The first is the fact that we had to shadow `=` in our package. Common Lisp forbids the redefinition of the functions, macros and special forms defined in the standard, so we have to go out of our way if we want to achieve that effect.
 
-As Clomp demonstrates, this is not too difficult, and far from being a kludge, it's actually a quite natural design pattern in the creation of generic interpretation and analysis tools when we want enough flexibility to let the user decide whether to delegate a particular fragment of a computation to the underlying Common Lisp implementation.
+As Clomp demonstrates, this is not too difficult, and far from being a kludge, it's actually a quite natural design pattern in the creation of generic interpretation and analysis tools when we want enough flexibility to let the user decide whether to delegate a particular fragment of a computation to the underlying Common Lisp implementation. We can recreate the behavior of the pre-ANSI `eval-hook`, or create families of reflective tools that intercept function calls, variable lookups, and other events.
 
 > The second is the fact that Common Lisp has so many special forms and macros - `and` just happens to be one of them. Smalltalk avoids this problem by doing virtually everything via message passing and closures. In Common Lisp we don't have this straightjacket, but we also don't have this luxury of assuming that everything is an object or a closure.
 

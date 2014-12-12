@@ -34,7 +34,7 @@
                          (:file "utils")
                          (:file "clomp"))
             :serial t))
-  :depends-on (:named-readtables :contextl :macroexpand-dammit))
+  :depends-on (:named-readtables :contextl :macroexpand-dammit.clomp-patch))
 
 (defsystem :clomp-test
   :name "clomp-test"

@@ -20,6 +20,7 @@ install:
     else
       curl https://raw.githubusercontent.com/luismbo/cl-travis/master/install.sh | sh;
     fi
+  - git clone --depth=1 git://github.com/DalekBaldwin/macroexpand-dammit.clomp-patch.git ~/lisp/macroexpand-dammit.clomp-patch
 
 script:
   - cl -e '(in-package :cl-user)'

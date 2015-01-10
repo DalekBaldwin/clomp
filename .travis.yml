@@ -30,6 +30,4 @@ script:
                   (lambda (c h)
                     (declare (ignore c h))
                     (uiop:quit -1))))
-             (lisp-unit2:with-failure-debugging-context
-                 (lambda ()
-                   (clomp-test:run-all-tests))))'
+             (clomp-test:run-all-tests))'

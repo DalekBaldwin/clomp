@@ -44,4 +44,3 @@
             :components ((:file "package")
                          (:file "clomp-test" :depends-on ("package")))))
   :depends-on (:clomp :stefil))
-

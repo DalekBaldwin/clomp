@@ -385,6 +385,9 @@
 
 (deflayer progn-forms)
 
+;; Problem: top-level `progn` forms are treated specially by Lisp so that each
+;; subform is itself treated as a top-level form, and expanding into an
+;; `evaluate` form prevents that.
 (defmacro clomp-shadow:progn (&whole whole-sexp &rest forms)
   `(evaluate
     (make-instance 'clomp-shadow:progn
@@ -660,6 +663,12 @@
              (find-package internal-package-name)
              (make-package internal-package-name)))))
 
+;; Handling mutually recursive functions is tricky because it means invocations
+;; appear before their expansions are defined. We can cache and reevaluate each
+;; function's body of code, but this will only work if they are all top-level
+;; forms in the null lexical environment. These situations are uncommon though.
+;; Proper handling of all possibilities would require a more thorough global
+;; static analysis.
 (defmacro clomp-shadow:defun (&whole whole-sexp name args &body body &environment env)
   (let* ((internal-symbol (internal-symbol name))
          (macro-body

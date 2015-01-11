@@ -6,7 +6,7 @@
 This project is intended to be a jumping-off point for exploring a number of different AOP-style metaprogramming strategies. For purposes of demonstration, I'm presenting what I've found to be the most concise and comprehensible possible implementation of a powerful concept. Here's how it could be used to trace a few selected language elements while leaving the rest of the language untouched:
 
 ```lisp
-(in-package :cl)
+(in-package :cl-user)
 
 (defpackage :clomp-user-imp
   (:use :cl :contextl))

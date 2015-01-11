@@ -1,4 +1,4 @@
-(in-package :cl)
+(in-package :cl-user)
 
 (defpackage :clomp-test
   (:use :cl :stefil)
@@ -16,7 +16,6 @@
 
 (in-package :clomp-test-implementation)
 
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (unless (named-readtables:find-readtable :clomp-test)
-    (named-readtables:defreadtable :clomp-test
-      (:merge :clomp))))
+(unless (named-readtables:find-readtable :clomp-test)
+  (named-readtables:defreadtable :clomp-test
+    (:merge :clomp)))

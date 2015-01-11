@@ -8,7 +8,6 @@
 (defun clomp-test:run-all-tests ()
   (clomp-test:test-all))
 
-
 (define-layered-method clomp:evaluate
   :around ((form clomp:form))
   (call-next-method))

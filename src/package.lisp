@@ -1,4 +1,4 @@
-(in-package :cl)
+(in-package :cl-user)
 
 (in-package :clomp-system)
 
@@ -135,13 +135,12 @@
 (defpackage :clomp-implementation
   (:use :cl :contextl))
 
-(in-package :cl)
+(in-package :cl-user)
 
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (unless (named-readtables:find-readtable :clomp)
-    (named-readtables:defreadtable :clomp
-      (:merge :standard)
-      (:dispatch-macro-char #\# #\'
-                            (lambda (stream subchar arg)
-                              (declare (ignore subchar arg))
-                              `(clomp-shadow:function ,(read stream t nil t)))))))
+(unless (named-readtables:find-readtable :clomp)
+  (named-readtables:defreadtable :clomp
+    (:merge :standard)
+    (:dispatch-macro-char #\# #\'
+                          (lambda (stream subchar arg)
+                            (declare (ignore subchar arg))
+                            `(clomp-shadow:function ,(read stream t nil t))))))

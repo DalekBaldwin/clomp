@@ -1,4 +1,4 @@
-(in-package #:clomp-test-implementation)
+(in-package :clomp-test-implementation)
 (named-readtables:in-readtable :clomp-test)
 
 (in-root-suite)
@@ -12,7 +12,7 @@
   :around ((form clomp:form))
   (call-next-method))
 
-(in-package #:clomp-test)
+(in-package :clomp-test)
 
 ;;;; most of these tests are pulled from examples in the HyperSpec
 

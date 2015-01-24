@@ -1,6 +1,6 @@
-(in-package #:cl-user)
+(in-package :cl-user)
 
-(in-package #:clomp-system)
+(in-package :clomp-system)
 
 (cl:eval-when (:compile-toplevel :load-toplevel :execute)
   (defparameter *shadowed-functions-and-macros*
@@ -36,12 +36,12 @@
       #:unwind-protect)))
 
 (defmacro define-clomp-package ()
-  `(defpackage #:clomp
-     (:use #:cl)
+  `(defpackage :clomp
+     (:use :cl)
      (:shadow
       ,@*special-operators*
       ,@(loop for symbol in *shadowed-functions-and-macros*
-           collect (make-symbol (symbol-name symbol))))
+           collect symbol))
      (:export
       #:evaluate
       #:sexp
@@ -54,8 +54,8 @@
       ,@(loop for symbol in *shadowed-functions-and-macros*
            collect (make-symbol (symbol-name symbol))))))
 
-(defpackage #:clomp-shadow
-  (:use #:cl)
+(defpackage :clomp-shadow
+  (:use :cl)
   #.`(:shadow
       ,@(loop for symbol being the external-symbols of :common-lisp
            when (or (fboundp symbol)
@@ -67,8 +67,8 @@
                     (special-operator-p symbol))
            collect (make-symbol (symbol-name symbol)))))
 
-(defpackage #:clomp
-  (:use #:cl #:contextl #:macroexpand-dammit.clomp-patch)
+(defpackage :clomp
+  (:use :cl :contextl :macroexpand-dammit.clomp-patch)
   #.`(:export
       #:continuation
       #:closure
@@ -131,10 +131,10 @@
       
       #:function-path-graph))
 
-(defpackage #:clomp-implementation
-  (:use #:cl #:contextl))
+(defpackage :clomp-implementation
+  (:use :cl :contextl))
 
-(in-package #:cl-user)
+(in-package :cl-user)
 
 (unless (named-readtables:find-readtable :clomp)
   (named-readtables:defreadtable :clomp

@@ -1,4 +1,4 @@
-(in-package :clomp)
+(in-package #:clomp)
 
 (defclass continuation ()
   ((closure

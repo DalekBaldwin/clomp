@@ -1,4 +1,4 @@
-(in-package :clomp)
+(in-package #:clomp)
 
 (defun sanitize-accessor (form)
   (cond ((atom form) form)
